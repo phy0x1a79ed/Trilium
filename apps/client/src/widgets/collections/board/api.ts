@@ -27,7 +27,13 @@ export default class BoardApi {
         private viewConfig: BoardViewData,
         private saveConfig: (newConfig: BoardViewData) => void,
         private setBranchIdToEdit: (branchId: string | undefined) => void,
-        private statusDefinition?: BoardStatusDefinition
+        private statusDefinition?: BoardStatusDefinition,
+        /**
+         * The columns this board has deleted or renamed away, shared with the view that resolves
+         * them. Owned by the view rather than by this object, which is rebuilt on every render and
+         * would forget a change before its own writes had landed.
+         */
+        private droppedColumns: Set<string> = new Set()
     ) {
         this.isRelationMode = statusAttribute.startsWith("~");
 
@@ -88,6 +94,7 @@ export default class BoardApi {
             ? { name: "deleteRelation", relationName: this.statusAttribute }
             : { name: "deleteLabel", labelName: this.statusAttribute };
         await executeBulkActions(noteIds, [ action ]);
+        this.droppedColumns.add(column);
         this.storeColumns((this.viewConfig?.columns ?? []).filter(col => col.value !== column));
     }
 
@@ -104,6 +111,8 @@ export default class BoardApi {
             ? { name: "updateRelationTarget", relationName: this.statusAttribute, targetNoteId: newValue }
             : { name: "updateLabelValue", labelName: this.statusAttribute, labelValue: newValue };
         await executeBulkActions(noteIds, [ action ]);
+
+        this.droppedColumns.add(oldValue);
 
         // Rename the column in the persisted data.
         this.storeColumns((this.viewConfig?.columns ?? [])
@@ -157,6 +166,12 @@ export default class BoardApi {
      * to disk but stay invisible until the view is re-entered.
      */
     private storeColumns(columns: BoardColumnData[]) {
+        // A column the board is asking for is one it is no longer dropping, so adding back a name
+        // that was deleted or renamed away works the way typing any other name does.
+        for (const { value } of columns) {
+            this.droppedColumns.delete(value);
+        }
+
         this.viewConfig = { ...this.viewConfig, columns };
         this.saveConfig(this.viewConfig);
         // Not awaited — every caller is the tail of a user gesture the board has already rendered —
@@ -217,17 +232,6 @@ export default class BoardApi {
             labelType: "select" as const,
             selectOptions: columns
         };
-
-        // Applied to the copy the board is holding, before the write goes out. A column change
-        // re-renders the board straight away while the write is still in flight, and that render
-        // resolves its columns from this definition: reading the list it has just replaced would
-        // put a removed column back, and the resolved list is persisted, so it would stay back.
-        if (this.statusDefinition) {
-            this.statusDefinition.definition = definition;
-            this.statusDefinition.options = columns;
-            // The write lands on the board, so a definition it merely copied is its own from here.
-            this.statusDefinition.isOwned = true;
-        }
 
         // Written by name rather than by attribute id, so that two syncs which overlap — a column
         // edit landing mid-refresh, or one refresh starting before the previous write is back —

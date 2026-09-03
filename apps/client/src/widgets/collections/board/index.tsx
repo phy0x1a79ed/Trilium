@@ -112,8 +112,15 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const statusDefinition = useMemo(
         () => getStatusDefinition(parentNote, statusAttributeWithPrefix),
         [ parentNote, statusAttributeWithPrefix, definitionRevision ]);
+    /**
+     * The columns deleted or renamed away here, kept for as long as the view is open.
+     *
+     * It lives in the view rather than in the API because the API is rebuilt on every render, and
+     * the writes a column change starts outlive several of those.
+     */
+    const droppedColumns = useRef(new Set<string>());
     const api = useMemo(() => {
-        return new Api(byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig, setBranchIdToEdit, statusDefinition );
+        return new Api(byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig, setBranchIdToEdit, statusDefinition, droppedColumns.current );
     }, [ byColumn, columns, parentNote, statusAttributeWithPrefix, viewConfig, saveConfig, setBranchIdToEdit, statusDefinition ]);
     // Every member is one of useState's own setters, so this value is built once and never changes
     // identity -- a drag cannot reach anything that reads only this.
@@ -139,7 +146,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn, dropPosition, dropTarget ]);
 
     function refresh() {
-        getBoardData(parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived, statusDefinition?.options ?? [])
+        getBoardData(parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived, statusDefinition?.options ?? [], droppedColumns.current)
             .then(({ byColumn, columns, newPersistedData, isInRelationMode }) => {
                 setByColumn(byColumn);
                 setIsRelationMode(isInRelationMode);

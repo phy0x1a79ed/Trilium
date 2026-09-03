@@ -58,4 +58,24 @@ describe("Board data", () => {
             "Deep": "Metasmith/Notes"
         });
     });
+
+    it("shows no column the board has dropped, whatever the attachment still says", async () => {
+        const parentNote = buildNote({
+            title: "Board",
+            "#collection": "",
+            "#viewType": "board",
+            children: [ { title: "One", "#status": "To Do" } ]
+        });
+
+        const data = await getBoardData(
+            parentNote,
+            "status",
+            { columns: [ { value: "To Do" }, { value: "Blocked" } ] },
+            false,
+            [ "To Do", "Blocked" ],
+            new Set([ "Blocked" ]));
+
+        expect(data.columns).toEqual([ "To Do" ]);
+        expect([ ...data.byColumn.keys() ]).toEqual([ "To Do" ]);
+    });
 });
