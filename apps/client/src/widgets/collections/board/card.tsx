@@ -22,6 +22,7 @@ export interface CardDragData {
 function Card({
     api,
     note,
+    path,
     branch,
     column,
     index,
@@ -30,6 +31,11 @@ function Card({
 }: {
     api: BoardApi,
     note: FNote,
+    /**
+     * Where the card sits under the board, `/`-joined and empty for a direct child. Already a
+     * string so that the memo below still compares it equal across an unrelated redraw.
+     */
+    path: string,
     branch: FBranch,
     column: string,
     index: number,
@@ -120,6 +126,7 @@ function Card({
                 <>
                     <span className="title">
                         <span class={`icon ${icon}`} />
+                        {path ? <span className="path">{path}/</span> : null}
                         {title}
                     </span>
                     <span

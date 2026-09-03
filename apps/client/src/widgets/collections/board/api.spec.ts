@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FAttribute from "../../../entities/fattribute";
 import FNote from "../../../entities/fnote";
+import { executeBulkActions } from "../../../services/bulk_action";
 import froca from "../../../services/froca";
 import noteAttributeCache from "../../../services/note_attribute_cache";
 import server from "../../../services/server";
@@ -28,6 +29,7 @@ function createApi(
 ) {
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
+    const statusDefinition = getStatusDefinition(board, statusAttribute);
     const api = new BoardApi(
         new Map(),
         columns,
@@ -36,12 +38,19 @@ function createApi(
         viewConfig,
         (newConfig) => saved.push(newConfig),
         () => {},
-        getStatusDefinition(board, statusAttribute)
+        statusDefinition
     );
-    return { api, saved };
+    return { api, saved, statusDefinition };
 }
 
 describe("BoardApi column mutations", () => {
+    beforeEach(() => {
+        // The definition write is a real server call these tests are not about. Restored first, or
+        // each spy wraps the previous one.
+        vi.restoreAllMocks();
+        vi.spyOn(server, "put").mockResolvedValue(undefined);
+    });
+
     /**
      * #10689: the view re-renders off the identity of the config object it is handed
      * (`useEffect(refresh, [ …, viewConfig ])`). A mutator that edits the config in place and saves
@@ -86,6 +95,59 @@ describe("BoardApi column mutations", () => {
         api.reorderColumn(0, 2);
 
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "Done", "To Do", "In Progress" ]);
+    });
+
+    /**
+     * A column change re-renders the board at once, and the render resolves the columns from the
+     * definition before anything else. The write to the definition is a server round trip, so that
+     * render reads the list the change was meant to replace and puts the column back — and it
+     * persists what it resolved, so the column stays back. Deleting an empty column, which nothing
+     * else names, never took at all.
+     */
+    it("takes a removed column out of the definition it holds, not only the server's", async () => {
+        const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done;Blocked" });
+        const { api, statusDefinition, saved } = createApi(
+            { columns: [ { value: "To Do" }, { value: "Done" }, { value: "Blocked" } ] },
+            [ "To Do", "Done", "Blocked" ],
+            board);
+
+        await api.removeColumn("Blocked");
+
+        expect(statusDefinition?.options).toEqual([ "To Do", "Done" ]);
+        expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Done" ]);
+    });
+
+    /** The same defect renaming: the old name leads from the definition and the new one follows. */
+    it("leaves one column behind a rename rather than the old name and the new one", async () => {
+        const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done" });
+        const { api, statusDefinition, saved } = createApi(
+            { columns: [ { value: "To Do" }, { value: "Done" } ] },
+            [ "To Do", "Done" ],
+            board);
+
+        await api.renameColumn("Done", "Shipped");
+
+        expect(statusDefinition?.options).toEqual([ "To Do", "Shipped" ]);
+        expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Shipped" ]);
+    });
+
+    /**
+     * A definition owned by an ancestor describes notes that are not on this board, so the board may
+     * not rewrite it. Going ahead would strip the value from the notes and leave the column standing.
+     */
+    it("refuses a column named by a definition it may not rewrite", async () => {
+        vi.mocked(executeBulkActions).mockClear();
+        const board = buildBoard({}, [
+            { noteId: "someAncestor", name: "label:status", value: "promoted,single,select,options=To Do;Done" }
+        ]);
+        const { api, saved } = createApi(
+            { columns: [ { value: "To Do" }, { value: "Done" } ] }, [ "To Do", "Done" ], board);
+
+        await api.removeColumn("Done");
+        await api.renameColumn("Done", "Shipped");
+
+        expect(executeBulkActions).not.toHaveBeenCalled();
+        expect(saved).toEqual([]);
     });
 });
 

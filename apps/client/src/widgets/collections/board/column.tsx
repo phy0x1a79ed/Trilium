@@ -2,7 +2,6 @@ import { Fragment } from "preact";
 import { useCallback, useContext, useEffect, useRef, useState } from "preact/hooks";
 import { JSX } from "preact/jsx-runtime";
 
-import FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import { ContextMenuEvent } from "../../../menus/context_menu";
 import branches from "../../../services/branches";
@@ -15,11 +14,12 @@ import { BoardActionsContext, BoardDragStateContext, TitleEditor } from ".";
 import BoardApi from "./api";
 import Card, { CARD_CLIPBOARD_TYPE, CardDragData } from "./card";
 import { openColumnContextMenu } from "./context_menu";
+import { BoardCard } from "./data";
 
 interface DragContext {
     column: string;
     columnIndex: number,
-    columnItems?: { note: FNote, branch: FBranch }[];
+    columnItems?: BoardCard[];
 }
 
 export default function Column({
@@ -33,7 +33,7 @@ export default function Column({
     isAnyColumnDragging,
     isInRelationMode
 }: {
-    columnItems?: { note: FNote, branch: FBranch }[];
+    columnItems?: BoardCard[];
     isDraggingColumn: boolean,
     api: BoardApi,
     parentNote: FNote,
@@ -135,7 +135,7 @@ export default function Column({
             </h3>
 
             <div className="board-column-content" onWheel={handleScroll}>
-                {(columnItems ?? []).map(({ note, branch }, index) => {
+                {(columnItems ?? []).map(({ note, branch, path }, index) => {
                     const showIndicatorBefore = dropPosition?.column === column &&
                                             dropPosition.index === index &&
                                             draggedCard?.noteId !== note.noteId;
@@ -148,6 +148,7 @@ export default function Column({
                             <Card
                                 api={api}
                                 note={note}
+                                path={path}
                                 branch={branch}
                                 column={column}
                                 index={index}

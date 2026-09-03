@@ -30,4 +30,32 @@ describe("Board data", () => {
         const noteIds = [...data.byColumn.values()].flat().map(item => item.note.noteId);
         expect(noteIds.length).toBe(3);
     });
+
+    it("gives each card its path from the board, and a direct child none", async () => {
+        const parentNote = buildNote({
+            title: "Board",
+            "#collection": "",
+            "#viewType": "board",
+            children: [
+                { title: "Top", "#status": "To Do" },
+                {
+                    title: "Metasmith",
+                    children: [
+                        { title: "Outline", "#status": "To Do" },
+                        { title: "Notes", children: [ { title: "Deep", "#status": "To Do" } ] }
+                    ]
+                }
+            ]
+        });
+
+        const data = await getBoardData(parentNote, "status", {}, false);
+        const paths = Object.fromEntries(
+            [ ...data.byColumn.values() ].flat().map(item => [ item.note.title, item.path ]));
+
+        expect(paths).toEqual({
+            "Top": "",
+            "Outline": "Metasmith",
+            "Deep": "Metasmith/Notes"
+        });
+    });
 });

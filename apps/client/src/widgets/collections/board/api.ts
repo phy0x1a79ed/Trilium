@@ -76,6 +76,11 @@ export default class BoardApi {
     }
 
     async removeColumn(column: string) {
+        if (this.isColumnFixedByDefinition(column)) {
+            toast.showError(t("board_view.column-fixed-by-definition"));
+            return;
+        }
+
         // Remove the value from the notes.
         const noteIds = this.byColumn?.get(column)?.map(item => item.note.noteId) || [];
 
@@ -87,6 +92,11 @@ export default class BoardApi {
     }
 
     async renameColumn(oldValue: string, newValue: string) {
+        if (this.isColumnFixedByDefinition(oldValue)) {
+            toast.showError(t("board_view.column-fixed-by-definition"));
+            return;
+        }
+
         const noteIds = this.byColumn?.get(oldValue)?.map(item => item.note.noteId) || [];
 
         // Change the value in the notes.
@@ -98,6 +108,20 @@ export default class BoardApi {
         // Rename the column in the persisted data.
         this.storeColumns((this.viewConfig?.columns ?? [])
             .map(col => col.value === oldValue ? { ...col, value: newValue } : col));
+    }
+
+    /**
+     * Whether a column is named by a definition this board may not rewrite — one owned by an
+     * ancestor, or shared through a template with notes that are not on this board.
+     *
+     * Such a column cannot be removed or renamed from here at all. The definition goes on offering
+     * it and the board resolves its columns from the definition first, so the column returns on the
+     * next render with the notes' values already stripped. Refusing is the honest answer: the place
+     * to change it is the definition, where it lives.
+     */
+    private isColumnFixedByDefinition(column: string) {
+        return !canStoreColumnsInDefinition(this.statusDefinition)
+            && !!this.statusDefinition?.options.includes(column);
     }
 
     reorderColumn(fromIndex: number, toIndex: number) {
@@ -193,6 +217,17 @@ export default class BoardApi {
             labelType: "select" as const,
             selectOptions: columns
         };
+
+        // Applied to the copy the board is holding, before the write goes out. A column change
+        // re-renders the board straight away while the write is still in flight, and that render
+        // resolves its columns from this definition: reading the list it has just replaced would
+        // put a removed column back, and the resolved list is persisted, so it would stay back.
+        if (this.statusDefinition) {
+            this.statusDefinition.definition = definition;
+            this.statusDefinition.options = columns;
+            // The write lands on the board, so a definition it merely copied is its own from here.
+            this.statusDefinition.isOwned = true;
+        }
 
         // Written by name rather than by attribute id, so that two syncs which overlap — a column
         // edit landing mid-refresh, or one refresh starting before the previous write is back —
