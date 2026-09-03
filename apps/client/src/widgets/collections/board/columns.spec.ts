@@ -34,6 +34,25 @@ describe("resolveBoardColumns", () => {
         expect(resolveBoardColumns([ "", "  " ], [ " Todo " ], [ "todo" ]))
             .toEqual([ "Todo", "todo" ]);
     });
+
+    /**
+     * The deletion reaches the notes, the attachment and the definition as three separate round
+     * trips, and a refresh landing between them resolves from whichever it can see — then persists
+     * what it resolved. Without this the column comes back, and stays back.
+     */
+    it("holds out a dropped column no matter which source still names it", () => {
+        expect(resolveBoardColumns(
+            [ "Todo", "Blocked" ],
+            [ "Todo", "Blocked" ],
+            [ "Todo" ],
+            new Set([ "Blocked" ])
+        )).toEqual([ "Todo" ]);
+    });
+
+    it("gives a dropped column back as soon as a note carries it again", () => {
+        expect(resolveBoardColumns([], [], [ "Todo", "Blocked" ], new Set([ "Blocked" ])))
+            .toEqual([ "Todo", "Blocked" ]);
+    });
 });
 
 describe("getStatusDefinition", () => {

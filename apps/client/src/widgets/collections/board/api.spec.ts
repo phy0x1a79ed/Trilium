@@ -30,6 +30,7 @@ function createApi(
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
     const statusDefinition = getStatusDefinition(board, statusAttribute);
+    const droppedColumns = new Set<string>();
     const api = new BoardApi(
         new Map(),
         columns,
@@ -38,9 +39,10 @@ function createApi(
         viewConfig,
         (newConfig) => saved.push(newConfig),
         () => {},
-        statusDefinition
+        statusDefinition,
+        droppedColumns
     );
-    return { api, saved, statusDefinition };
+    return { api, saved, statusDefinition, droppedColumns };
 }
 
 describe("BoardApi column mutations", () => {
@@ -98,37 +100,50 @@ describe("BoardApi column mutations", () => {
     });
 
     /**
-     * A column change re-renders the board at once, and the render resolves the columns from the
-     * definition before anything else. The write to the definition is a server round trip, so that
-     * render reads the list the change was meant to replace and puts the column back — and it
-     * persists what it resolved, so the column stays back. Deleting an empty column, which nothing
-     * else names, never took at all.
+     * A column change re-renders the board at once, while the writes it started are still in
+     * flight. Every one of those renders resolves the columns from the notes, the attachment and
+     * the definition, and persists what it resolved — so a single render reading a source the
+     * change has not reached yet puts the column back for good. Deleting an empty column, which
+     * nothing else names, never took at all.
      */
-    it("takes a removed column out of the definition it holds, not only the server's", async () => {
+    it("marks a removed column as dropped, so no render in flight can bring it back", async () => {
         const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done;Blocked" });
-        const { api, statusDefinition, saved } = createApi(
+        const { api, droppedColumns, saved } = createApi(
             { columns: [ { value: "To Do" }, { value: "Done" }, { value: "Blocked" } ] },
             [ "To Do", "Done", "Blocked" ],
             board);
 
         await api.removeColumn("Blocked");
 
-        expect(statusDefinition?.options).toEqual([ "To Do", "Done" ]);
+        expect([ ...droppedColumns ]).toEqual([ "Blocked" ]);
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Done" ]);
     });
 
-    /** The same defect renaming: the old name leads from the definition and the new one follows. */
-    it("leaves one column behind a rename rather than the old name and the new one", async () => {
+    /** The same defect renaming: one rename left the old name and the new one standing together. */
+    it("marks the old name as dropped so a rename leaves one column", async () => {
         const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done" });
-        const { api, statusDefinition, saved } = createApi(
+        const { api, droppedColumns, saved } = createApi(
             { columns: [ { value: "To Do" }, { value: "Done" } ] },
             [ "To Do", "Done" ],
             board);
 
         await api.renameColumn("Done", "Shipped");
 
-        expect(statusDefinition?.options).toEqual([ "To Do", "Shipped" ]);
+        expect([ ...droppedColumns ]).toEqual([ "Done" ]);
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Shipped" ]);
+    });
+
+    it("stops dropping a column the user adds back", async () => {
+        const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Blocked" });
+        const { api, droppedColumns } = createApi(
+            { columns: [ { value: "To Do" }, { value: "Blocked" } ] },
+            [ "To Do", "Blocked" ],
+            board);
+
+        await api.removeColumn("Blocked");
+        await api.addNewColumn("Blocked");
+
+        expect([ ...droppedColumns ]).toEqual([]);
     });
 
     /**
