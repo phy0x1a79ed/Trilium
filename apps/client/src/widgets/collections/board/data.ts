@@ -3,10 +3,21 @@ import FNote from "../../../entities/fnote";
 import { resolveBoardColumns } from "./columns";
 import { BoardViewData } from "./index";
 
-export type ColumnMap = Map<string, {
+export interface BoardCard {
     branch: FBranch;
     note: FNote;
-}[]>;
+    /**
+     * Where the card sits under the board: the titles of its ancestors below the board, joined by
+     * `/`, empty for a direct child.
+     *
+     * Accumulated on the way down rather than rebuilt in the card, because a note cloned to two
+     * places under one board has one path per branch and only the walk knows which branch this card
+     * was reached by. Joined here so that a memoized card compares it as one string.
+     */
+    path: string;
+}
+
+export type ColumnMap = Map<string, BoardCard[]>;
 
 /**
  * @param definitionOptions the choices the board's group-by definition offers, empty when it has no
@@ -22,7 +33,7 @@ export async function getBoardData(
     const byColumn: ColumnMap = new Map();
 
     // First, scan all notes to find what columns actually exist
-    await recursiveGroupBy(parentNote.getChildBranches(), byColumn, groupByColumn, includeArchived, new Set<string>());
+    await recursiveGroupBy(parentNote.getChildBranches(), byColumn, groupByColumn, includeArchived, new Set<string>(), "");
 
     const persistedColumns = (persistedData.columns ?? []).map(c => c.value);
     const columns = resolveBoardColumns(definitionOptions, persistedColumns, [ ...byColumn.keys() ]);
@@ -50,13 +61,14 @@ export async function getBoardData(
     };
 }
 
-async function recursiveGroupBy(branches: FBranch[], byColumn: ColumnMap, groupByColumn: string, includeArchived: boolean, seenNoteIds: Set<string>) {
+async function recursiveGroupBy(branches: FBranch[], byColumn: ColumnMap, groupByColumn: string, includeArchived: boolean, seenNoteIds: Set<string>, path: string) {
     for (const branch of branches) {
         const note = await branch.getNote();
         if (!note || (!includeArchived && note.isArchived)) continue;
 
         if (note.type !== "search" && note.hasChildren()) {
-            await recursiveGroupBy(note.getChildBranches(), byColumn, groupByColumn, includeArchived, seenNoteIds);
+            const childPath = path ? `${path}/${note.title}` : note.title;
+            await recursiveGroupBy(note.getChildBranches(), byColumn, groupByColumn, includeArchived, seenNoteIds, childPath);
         }
 
         const group = note.getLabelOrRelation(groupByColumn);
@@ -70,7 +82,8 @@ async function recursiveGroupBy(branches: FBranch[], byColumn: ColumnMap, groupB
 
         byColumn.get(group)!.push({
             branch,
-            note
+            note,
+            path
         });
         seenNoteIds.add(note.noteId);
     }

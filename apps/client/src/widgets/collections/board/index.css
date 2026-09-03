@@ -359,3 +359,8 @@ body.mobile .board-view-container .board-add-column {
   max-width: 200px;
   word-wrap: break-word;
 }
+
+/* Secondary to the title it prefixes: a card says where it lives, but reads as its own name. */
+.board-view-container .board-note .title .path {
+  opacity: 0.6;
+}
