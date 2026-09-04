@@ -53,9 +53,9 @@ export function bootstrap(req: Request, res: Response) {
             sliceCanWrite: sliceContext.canWrite
         } : {}),
         // Whether this instance can mint slice links, which gates the share affordance in the tree.
-        // Not part of the block above: a signed-in person is the one who shares, and they are never
-        // in a slice.
-        sliceSharingAvailable: isSliceSharingAvailable(),
+        // Never inside a slice: the mask refuses the routes a visitor's client would call, so an
+        // entry it could render would only lead to a 403.
+        sliceSharingAvailable: !sliceContext && isSliceSharingAvailable(),
         // The setup wizard's password gate is exempted for exactly what `checkSetupAuth` exempts:
         // the trusted renderer, which is the application itself, and an instance already configured
         // to trust whoever can reach it. Asked for anywhere else, the screen would be holding out
