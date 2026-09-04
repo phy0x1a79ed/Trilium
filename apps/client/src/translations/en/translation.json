@@ -491,6 +491,7 @@
     "source_description_etapi": "Created via the External Trilium API",
     "source_description_llm": "Created by the AI assistant",
     "source_description_restore": "Saved before restoring a previous revision",
+    "source_description_slice": "Written by a visitor through a shared slice link",
     "source_description_unknown": "Source not available"
   },
   "sort_child_notes": {
@@ -2453,7 +2454,8 @@
     "converted-to-attachments_one": "{{count}} note has been converted to attachments.",
     "converted-to-attachments_other": "{{count}} notes have been converted to attachments.",
     "convert-to-attachment-confirm": "Are you sure you want to convert the selected notes into attachments of their parent notes? This operation only applies to Image notes, other notes will be skipped.",
-    "open-in-popup": "Quick edit"
+    "open-in-popup": "Quick edit",
+    "share-as-slice": "Share as slice…"
   },
   "shared_info": {
     "shared_publicly": "This note is shared publicly on {{- link}}.",
@@ -4036,5 +4038,31 @@
       "invalid-symbol": "the markdown symbol should be one character, excepting \"[\", \" \", \"X\", and \"]\"",
       "duplicate-symbol": "duplicate markdown symbol"
     }
+  },
+  "share_slice": {
+    "title": "Share “{{title}}” as a slice",
+    "explanation": "A slice link opens this note and everything under it to somebody with no account. Anything outside it stays out of reach.",
+    "visitor": "Visitor name",
+    "visitor_description": "Named on every change the visitor makes. Leave empty to mint a link anyone can follow.",
+    "visitor_placeholder": "Anyone with the link",
+    "expiry": "Link expires",
+    "expiry_never": "Never",
+    "expiry_day": "In a day",
+    "expiry_week": "In a week",
+    "expiry_month": "In a month",
+    "allow_editing": "Let the visitor edit text notes",
+    "allow_editing_hint": "Only the body of a text note can be changed. Titles, attributes and the tree itself stay read-only, and every change is kept in the note's history.",
+    "create": "Create link",
+    "existing": "Links already shared",
+    "loading": "Loading…",
+    "none": "This note is not shared yet.",
+    "revoke": "Revoke this link",
+    "revoke_confirm": "Revoke this link? Whoever holds it loses access immediately.",
+    "revoked": "The link no longer opens anything.",
+    "bound_to": "For {{user}}",
+    "open_to_anyone": "Anyone with the link",
+    "can_edit": "Can edit",
+    "read_only": "Read-only",
+    "expires_on": "Expires {{date}}"
   }
 }

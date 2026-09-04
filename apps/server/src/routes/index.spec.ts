@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { markAsInternalElectronRequest } from "../services/electron_request.js";
 
@@ -150,6 +150,37 @@ describe("bootstrap slice payload", () => {
         expect(body().sliceRootNoteId).toBe("sliceRoot1");
         expect(body().sliceUser).toBeNull();
     });
+
+    // What gates the "Share as slice" entry out of the note tree. Both variables are needed: the hub
+    // to mint through, and the edge origin to build a followable link from.
+    it("says sharing is unavailable without an awm gateway behind it", () => {
+        vi.stubEnv("AWM_HUB_URL", "");
+        vi.stubEnv("AWM_EDGE_URL", "");
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true }), res);
+
+        expect(body().sliceSharingAvailable).toBe(false);
+    });
+
+    it("says sharing is available once both the hub and the edge origin are named", () => {
+        vi.stubEnv("AWM_HUB_URL", "http://127.0.0.1:7819/");
+        vi.stubEnv("AWM_EDGE_URL", "https://example.invalid");
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true }), res);
+
+        expect(body().sliceSharingAvailable).toBe(true);
+    });
+
+    it("says sharing is unavailable with a hub but no public origin to build a link from", () => {
+        vi.stubEnv("AWM_HUB_URL", "http://127.0.0.1:7819/");
+        vi.stubEnv("AWM_EDGE_URL", "");
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true }), res);
+
+        expect(body().sliceSharingAvailable).toBe(false);
+    });
+
+    afterEach(() => vi.unstubAllEnvs());
 });
 
 describe("getView view resolution (desktop build, #10720)", () => {

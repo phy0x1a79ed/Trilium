@@ -315,7 +315,8 @@ const REVISION_SOURCE_ICONS: Record<string, string> = {
     manual: "bx bx-save",
     etapi: "bx bx-code-alt",
     llm: "bx bx-bot",
-    restore: "bx bx-history"
+    restore: "bx bx-history",
+    slice: "bx bx-share-alt"
 };
 const DEFAULT_REVISION_ICON = "bx bx-file";
 

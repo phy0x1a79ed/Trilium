@@ -5,6 +5,7 @@ import slice from "./slice.js";
 afterEach(() => {
     (globalThis as any).glob.sliceRootNoteId = undefined;
     (globalThis as any).glob.sliceCanWrite = undefined;
+    (globalThis as any).glob.sliceSharingAvailable = undefined;
 });
 
 describe("slice", () => {
@@ -35,5 +36,14 @@ describe("slice", () => {
         (globalThis as any).glob.sliceRootNoteId = undefined;
         expect(slice.canWrite()).toBe(false);
         expect(slice.isReadOnly()).toBe(false);
+    });
+
+    // What keeps the "Share as slice" entry out of the tree on an ordinary Trilium, which has no
+    // gateway to mint a link through.
+    it("reports sharing unavailable unless the bootstrap payload says otherwise", () => {
+        expect(slice.isSharingAvailable()).toBe(false);
+
+        (globalThis as any).glob.sliceSharingAvailable = true;
+        expect(slice.isSharingAvailable()).toBe(true);
     });
 });

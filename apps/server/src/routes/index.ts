@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 
 import packageJson from "../../package.json" with { type: "json" };
 import appPath from "../services/app_path.js";
+import { isAvailable as isSliceSharingAvailable } from "../services/awm_gateway.js";
 import assetPath from "../services/asset_path.js";
 import config from "../services/config.js";
 import { getLog } from "@triliumnext/core";
@@ -51,6 +52,10 @@ export function bootstrap(req: Request, res: Response) {
             sliceUser: sliceContext.user,
             sliceCanWrite: sliceContext.canWrite
         } : {}),
+        // Whether this instance can mint slice links, which gates the share affordance in the tree.
+        // Not part of the block above: a signed-in person is the one who shares, and they are never
+        // in a slice.
+        sliceSharingAvailable: isSliceSharingAvailable(),
         // The setup wizard's password gate is exempted for exactly what `checkSetupAuth` exempts:
         // the trusted renderer, which is the application itself, and an instance already configured
         // to trust whoever can reach it. Asked for anywhere else, the screen would be holding out

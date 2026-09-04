@@ -53,6 +53,14 @@ describe("Slice mask", () => {
         }
     });
 
+    it("refuses the routes that mint and revoke slices, so a link cannot make another link", () => {
+        expect(run({ path: `/api/slices/${ROOT}` })).toBe(403);
+        expect(run({ path: "/api/slices/inside" })).toBe(403);
+        // Refused for being unnamed rather than for being read-only, so a writable link fares no better.
+        expect(run({ method: "POST", path: "/api/slices", body: { noteId: "inside" }, write: true })).toBe(403);
+        expect(run({ method: "DELETE", path: "/api/slices/sometoken", write: true })).toBe(403);
+    });
+
     it("asks the tree route for a subtree inside the slice, and nothing else", () => {
         expect(run({ path: "/api/tree", query: { subTreeNoteId: ROOT } })).toBe("passed");
         expect(run({ path: "/api/tree", query: { subTreeNoteId: "inside" } })).toBe("passed");

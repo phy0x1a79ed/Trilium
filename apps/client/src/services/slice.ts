@@ -26,6 +26,14 @@ function isReadOnly(): boolean {
     return isSlice() && !canWrite();
 }
 
+/**
+ * Whether this instance can mint slice links, which needs an awm gateway behind it. False on an
+ * ordinary Trilium, where the share affordance is left out of the tree entirely.
+ */
+function isSharingAvailable(): boolean {
+    return glob.sliceSharingAvailable === true;
+}
+
 /** The note that stands in for "root" when nothing else specifies a hoisted note or a note path. */
 function defaultRootNoteId(): string {
     return getSliceRootNoteId() ?? "root";
@@ -36,5 +44,6 @@ export default {
     isSlice,
     canWrite,
     isReadOnly,
+    isSharingAvailable,
     defaultRootNoteId
 };
