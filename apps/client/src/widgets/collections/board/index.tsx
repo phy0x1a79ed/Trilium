@@ -113,14 +113,12 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
         () => getStatusDefinition(parentNote, statusAttributeWithPrefix),
         [ parentNote, statusAttributeWithPrefix, definitionRevision ]);
     /**
-     * The columns deleted or renamed away here, kept for as long as the view is open.
-     *
-     * It lives in the view rather than in the API because the API is rebuilt on every render, and
-     * the writes a column change starts outlive several of those.
+     * Whether this view has already seeded a definition for a board that had none at all. Guards
+     * `refresh()`'s one-time write so it fires at most once per view, not on every render.
      */
-    const droppedColumns = useRef(new Set<string>());
+    const hasSeededDefinitionRef = useRef(false);
     const api = useMemo(() => {
-        return new Api(byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig, setBranchIdToEdit, statusDefinition, droppedColumns.current );
+        return new Api(byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig, setBranchIdToEdit, statusDefinition);
     }, [ byColumn, columns, parentNote, statusAttributeWithPrefix, viewConfig, saveConfig, setBranchIdToEdit, statusDefinition ]);
     // Every member is one of useState's own setters, so this value is built once and never changes
     // identity -- a drag cannot reach anything that reads only this.
@@ -146,25 +144,21 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn, dropPosition, dropTarget ]);
 
     function refresh() {
-        getBoardData(parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived, statusDefinition?.options ?? [], droppedColumns.current)
-            .then(({ byColumn, columns, newPersistedData, isInRelationMode }) => {
+        getBoardData(parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived, statusDefinition?.options ?? [])
+            .then(({ byColumn, columns, isInRelationMode }) => {
                 setByColumn(byColumn);
                 setIsRelationMode(isInRelationMode);
                 setColumns(columns);
 
-                if (newPersistedData) {
-                    viewConfig = { ...newPersistedData };
-                    saveConfig(newPersistedData);
+                // `getStatusDefinition` finds an inherited definition as readily as an owned one,
+                // so finding nothing at all means this board has never been given one. Seeding is a
+                // create, never a reconciliation: a definition a column deletion emptied is still
+                // found, so it stays empty.
+                if (statusDefinition === undefined && !hasSeededDefinitionRef.current) {
+                    hasSeededDefinitionRef.current = true;
+                    api.syncColumnsToDefinition(columns)
+                        .catch((e) => console.error("Failed to seed the board's attribute definition:", e));
                 }
-
-                // The columns the board settled on are the options its definition should offer. This
-                // is what gives a board created after migration 0240 ran a definition at all, and what
-                // keeps one that gained a column from outside the board's own UI up to date. It writes
-                // only when the two actually differ, so the re-render its own write causes stops here.
-                // Reported rather than surfaced: nothing the user did is failing, and a board that
-                // cannot write it re-tries on the next render, which would toast on each one.
-                api.syncColumnsToDefinition(columns)
-                    .catch((e) => console.error("Failed to sync the board columns to the attribute definition:", e));
             });
     }
 

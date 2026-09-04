@@ -99,28 +99,18 @@ export function canStoreColumnsInDefinition(statusDefinition: BoardStatusDefinit
  * arranged before it had a definition, or a value a note still holds after the option behind it was
  * renamed away, both keep their place rather than taking their notes with them. Blank entries are
  * dropped and the comparison is exact, since two columns differing only in case are two columns.
- *
- * `droppedColumns` is the one thing that overrides all three, and it is what makes a deletion or a
- * rename stick. Those changes reach the notes, the config attachment and the definition as three
- * separate round trips, and every refresh in between resolves from whichever of them it can already
- * see and then persists what it resolved. One refresh reading a pre-change source is enough to put
- * the column back for good. A dropped column is therefore held out until a note carries its value
- * again, which is also how it comes back if someone re-creates it.
  */
 export function resolveBoardColumns(
     definitionOptions: string[],
     persistedColumns: string[],
-    discoveredValues: string[],
-    droppedColumns: ReadonlySet<string> = new Set()
+    discoveredValues: string[]
 ): string[] {
     const columns: string[] = [];
     const seen = new Set<string>();
-    const discovered = new Set(discoveredValues.map(value => value.trim()));
 
     for (const candidate of [ ...definitionOptions, ...persistedColumns, ...discoveredValues ]) {
         const value = candidate.trim();
         if (!value || seen.has(value)) continue;
-        if (droppedColumns.has(value) && !discovered.has(value)) continue;
         seen.add(value);
         columns.push(value);
     }

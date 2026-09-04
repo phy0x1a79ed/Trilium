@@ -30,7 +30,6 @@ function createApi(
     const board = parentNote ?? buildNote({ title: "Board" });
     const saved: BoardViewData[] = [];
     const statusDefinition = getStatusDefinition(board, statusAttribute);
-    const droppedColumns = new Set<string>();
     const api = new BoardApi(
         new Map(),
         columns,
@@ -39,10 +38,9 @@ function createApi(
         viewConfig,
         (newConfig) => saved.push(newConfig),
         () => {},
-        statusDefinition,
-        droppedColumns
+        statusDefinition
     );
-    return { api, saved, statusDefinition, droppedColumns };
+    return { api, saved, statusDefinition };
 }
 
 describe("BoardApi column mutations", () => {
@@ -99,51 +97,36 @@ describe("BoardApi column mutations", () => {
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "Done", "To Do", "In Progress" ]);
     });
 
-    /**
-     * A column change re-renders the board at once, while the writes it started are still in
-     * flight. Every one of those renders resolves the columns from the notes, the attachment and
-     * the definition, and persists what it resolved — so a single render reading a source the
-     * change has not reached yet puts the column back for good. Deleting an empty column, which
-     * nothing else names, never took at all.
-     */
-    it("marks a removed column as dropped, so no render in flight can bring it back", async () => {
+    /** Removing a column drops it from the view config, and from the definition it owns. */
+    it("removes a column from the view config and its definition", async () => {
         const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done;Blocked" });
-        const { api, droppedColumns, saved } = createApi(
+        const { api, saved } = createApi(
             { columns: [ { value: "To Do" }, { value: "Done" }, { value: "Blocked" } ] },
             [ "To Do", "Done", "Blocked" ],
             board);
 
         await api.removeColumn("Blocked");
 
-        expect([ ...droppedColumns ]).toEqual([ "Blocked" ]);
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Done" ]);
+        expect(server.put).toHaveBeenCalledWith("notes/boardNote/set-attribute", expect.objectContaining({
+            value: expect.stringContaining("options=To Do;Done")
+        }), undefined);
     });
 
-    /** The same defect renaming: one rename left the old name and the new one standing together. */
-    it("marks the old name as dropped so a rename leaves one column", async () => {
+    /** Renaming a column replaces the old name with the new one in both places. */
+    it("renames a column in the view config and its definition", async () => {
         const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Done" });
-        const { api, droppedColumns, saved } = createApi(
+        const { api, saved } = createApi(
             { columns: [ { value: "To Do" }, { value: "Done" } ] },
             [ "To Do", "Done" ],
             board);
 
         await api.renameColumn("Done", "Shipped");
 
-        expect([ ...droppedColumns ]).toEqual([ "Done" ]);
         expect(saved.at(-1)?.columns?.map(col => col.value)).toEqual([ "To Do", "Shipped" ]);
-    });
-
-    it("stops dropping a column the user adds back", async () => {
-        const board = buildBoard({ "#label:status": "promoted,single,select,options=To Do;Blocked" });
-        const { api, droppedColumns } = createApi(
-            { columns: [ { value: "To Do" }, { value: "Blocked" } ] },
-            [ "To Do", "Blocked" ],
-            board);
-
-        await api.removeColumn("Blocked");
-        await api.addNewColumn("Blocked");
-
-        expect([ ...droppedColumns ]).toEqual([]);
+        expect(server.put).toHaveBeenCalledWith("notes/boardNote/set-attribute", expect.objectContaining({
+            value: expect.stringContaining("options=To Do;Shipped")
+        }), undefined);
     });
 
     /**

@@ -22,9 +22,9 @@ import { unwrapStringOrBuffer } from "../services/utils/binary";
  * A board is left exactly as it is whenever the copy would be wrong or unsafe — see
  * {@link SkipReason} — and the board view keeps reading `board.json` for those.
  *
- * This runs once, against the boards that exist when the document is upgraded. Boards created
- * afterwards get their definition from the board view instead, which writes the columns it resolves
- * into one (see `BoardApi#syncColumnsToDefinition`).
+ * This runs once, against the boards that exist when the document is upgraded. A board created
+ * afterwards gets its definition from the board view instead, which seeds one the first time it
+ * finds none at all (see `BoardApi#syncColumnsToDefinition`) — a render otherwise writes nothing.
  */
 export default () => {
     getContext().init(() => {
