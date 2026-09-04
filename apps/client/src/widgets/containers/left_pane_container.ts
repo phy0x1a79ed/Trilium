@@ -1,4 +1,6 @@
 import options from "../../services/options.js";
+import resizer from "../../services/resizer.js";
+import slice from "../../services/slice.js";
 import FlexContainer from "./flex_container.js";
 import appContext, { type EventData } from "../../components/app_context.js";
 import type Component from "../../components/component.js";
@@ -18,6 +20,14 @@ export default class LeftPaneContainer extends FlexContainer<Component> {
 
     isEnabled() {
         return super.isEnabled() && this.currentLeftPaneVisible;
+    }
+
+    initialRenderCompleteEvent() {
+        // `LeftPaneToggle` normally sizes this pane, and it lives in the launcher pane a slice does
+        // not have. Without the resizer, Split never runs and the pane renders zero pixels wide.
+        if (slice.isSlice()) {
+            resizer.setupLeftPaneResizer(this.currentLeftPaneVisible);
+        }
     }
 
     setLeftPaneVisibilityEvent({ leftPaneVisible }: EventData<"setLeftPaneVisibility">) {

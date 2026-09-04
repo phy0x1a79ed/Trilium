@@ -36,6 +36,7 @@ import { doubleCsrfProtection as csrfMiddleware } from "./csrf_protection.js";
 import * as indexRoute from "./index.js";
 import loginRoute from "./login.js";
 import { apiResultHandler, apiRoute, asyncApiRoute, asyncRoute, importMiddlewareWithErrorHandling, route, router, uploadMiddlewareWithErrorHandling } from "./route_api.js";
+import { sliceMask } from "./slice_mask.js";
 // page routes
 import setupRoute from "./setup.js";
 
@@ -45,6 +46,11 @@ const GET = "get",
     DEL = "delete";
 
 function register(app: express.Application) {
+    // First on the router, so every route below it is masked whether or not anyone remembered to
+    // mask it -- including the ones a future upstream merge adds. Ordinary traffic passes through
+    // untouched; see `sliceMask`.
+    router.use(sliceMask);
+
     route(GET, "/login", [auth.checkAppInitialized, auth.checkPasswordSet], loginRoute.loginPage);
     route(GET, "/set-password", [auth.checkAppInitialized, auth.checkPasswordNotSet], loginRoute.setPasswordPage);
 

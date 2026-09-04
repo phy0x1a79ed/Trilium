@@ -54,6 +54,24 @@ describe("loadInitialTree", () => {
         expect(froca.notes[noteId]).toBeInstanceOf(FNote);
         (globalThis as any).glob.dbInitialized = false;
     });
+
+    it("asks for the slice's subtree instead of the whole tree when the bootstrap payload names a slice", async () => {
+        (globalThis as any).glob.dbInitialized = true;
+        (globalThis as any).glob.sliceRootNoteId = "slice-root-note";
+        const noteId = "slice-root-note";
+        server.get = vi.fn(async () => ({
+            notes: [{ noteId, title: "Slice root", type: "text", mime: "text/html", isProtected: false, blobId: "" }],
+            branches: [],
+            attributes: []
+        })) as typeof server.get;
+
+        await froca.loadInitialTree();
+
+        expect(server.get).toHaveBeenCalledWith(`tree?subTreeNoteId=${noteId}`);
+        expect(froca.notes[noteId]).toBeInstanceOf(FNote);
+        (globalThis as any).glob.dbInitialized = false;
+        (globalThis as any).glob.sliceRootNoteId = undefined;
+    });
 });
 
 describe("loadSubTree", () => {

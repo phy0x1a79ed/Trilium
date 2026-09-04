@@ -6,7 +6,7 @@ const CLOSED = 3;
 
 type Handler = (...args: any[]) => void;
 
-const { state, getLogMock, configMock, randomStringMock, WebSocketServerMock } = vi.hoisted(() => {
+const { state, getLogMock, configMock, randomStringMock, WebSocketServerMock, isNoteInSliceMock } = vi.hoisted(() => {
     const state: { instances: any[] } = { instances: [] };
 
     class WebSocketServerMock {
@@ -36,7 +36,10 @@ const { state, getLogMock, configMock, randomStringMock, WebSocketServerMock } =
         WebSocketServerMock,
         getLogMock: { error: vi.fn(), info: vi.fn() },
         configMock: { General: { noAuthentication: false } as { noAuthentication: boolean } | undefined },
-        randomStringMock: vi.fn(() => "client-id")
+        randomStringMock: vi.fn(() => "client-id"),
+        // Controls slice membership per test; readSliceContext stays real (it's pure header
+        // parsing) so a connection is tagged the way a live upgrade request would tag it.
+        isNoteInSliceMock: vi.fn((noteId: string) => noteId === "inside" || noteId === "root")
     };
 });
 
@@ -51,7 +54,14 @@ vi.mock("@triliumnext/core", async () => {
     const { shouldLogMessage } = await vi.importActual<typeof import("@triliumnext/core/src/services/messaging/index.js")>(
         "@triliumnext/core/src/services/messaging/index.js"
     );
-    return { getLog: () => getLogMock, shouldLogMessage };
+    const { readSliceContext } = await vi.importActual<typeof import("@triliumnext/core/src/services/slice.js")>(
+        "@triliumnext/core/src/services/slice.js"
+    );
+    return {
+        getLog: () => getLogMock,
+        shouldLogMessage,
+        slice: { readSliceContext, isNoteInSlice: isNoteInSliceMock }
+    };
 });
 
 import WebSocketMessagingProvider, { isHttpAttachableMessagingProvider } from "./ws_messaging_provider.js";
@@ -85,6 +95,8 @@ describe("WebSocketMessagingProvider", () => {
         getLogMock.info.mockClear();
         configMock.General = { noAuthentication: false };
         randomStringMock.mockReturnValue("client-id");
+        isNoteInSliceMock.mockClear();
+        isNoteInSliceMock.mockImplementation((noteId: string) => noteId === "inside" || noteId === "root");
         vi.spyOn(console, "log").mockImplementation(() => {});
     });
 
@@ -152,7 +164,7 @@ describe("WebSocketMessagingProvider", () => {
             provider.setClientMessageHandler(handler);
 
             const ws = makeSocket();
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
             expect(provider.getClientCount()).toBe(0); // server.clients still empty (we manage map)
             expect(provider.sendMessageToClient("client-id", { type: "ping" } as any)).toBe(true);
 
@@ -166,7 +178,7 @@ describe("WebSocketMessagingProvider", () => {
         it("ignores incoming messages when no handler is registered", async () => {
             const { server } = init();
             const ws = makeSocket();
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
             // With no handler registered the message listener parses the payload
             // and returns (undefined) without dispatching — emitting must not throw.
             expect(ws.emit("message", JSON.stringify({ type: "x" }))).toBeUndefined();
@@ -183,7 +195,7 @@ describe("WebSocketMessagingProvider", () => {
             // bubble up as an uncaught exception that crashes the process. See issue #9598.
             const { server } = init();
             const ws = makeSocket();
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
             expect(provider.sendMessageToClient("client-id", { type: "ping" } as any)).toBe(true);
 
             expect(() => ws.emit("error", new Error("WS_ERR_INVALID_CLOSE_CODE"))).not.toThrow();
@@ -227,6 +239,150 @@ describe("WebSocketMessagingProvider", () => {
         });
     });
 
+    describe("slice-scoped fan-out", () => {
+        const SLICE_HEADERS = { "x-awm-slice-root": "root" };
+
+        // Runs the real "connection" handler (so the socket is tagged the way an upgrade
+        // request tags it) and also registers it on the server's client set, which is what
+        // sendMessageToAllClients iterates.
+        function connect(server: any, headers: Record<string, string> = {}) {
+            const ws = makeSocket(OPEN);
+            server.emit("connection", ws, { headers });
+            server.clients.add(ws);
+            return ws;
+        }
+
+        it("leaves an untagged connection's message byte-for-byte unaffected", () => {
+            const { server } = init();
+            const untagged = connect(server);
+
+            const message = {
+                type: "frontend-update",
+                data: {
+                    lastSyncedPush: 1,
+                    entityChanges: [
+                        { entityName: "notes", entityId: "inside", hash: "h1", isSynced: true, isErased: false },
+                        { entityName: "notes", entityId: "outside", hash: "h2", isSynced: true, isErased: false },
+                        { entityName: "options", entityId: "theme", hash: "h3", isSynced: true, isErased: false }
+                    ]
+                }
+            } as WebSocketMessage;
+
+            provider.sendMessageToAllClients(message);
+
+            expect(untagged.sent).toEqual([JSON.stringify(message)]);
+            // A connection that was never tagged must never even reach the slice predicate.
+            expect(isNoteInSliceMock).not.toHaveBeenCalled();
+        });
+
+        it("gives a tagged connection only the entity changes its slice predicate admits", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+
+            const message = {
+                type: "frontend-update",
+                data: {
+                    lastSyncedPush: 1,
+                    entityChanges: [
+                        { entityName: "notes", entityId: "inside", hash: "h1", isSynced: true, isErased: false },
+                        { entityName: "notes", entityId: "outside", hash: "h2", isSynced: true, isErased: false },
+                        { entityName: "branches", entityId: "b1", entity: { noteId: "inside", parentNoteId: "root" }, hash: "h3", isSynced: true, isErased: false },
+                        { entityName: "branches", entityId: "b2", entity: { noteId: "outside", parentNoteId: "outside" }, hash: "h4", isSynced: true, isErased: false },
+                        { entityName: "attributes", entityId: "a1", entity: { noteId: "outside" }, hash: "h5", isSynced: true, isErased: false },
+                        { entityName: "attachments", entityId: "att1", entity: { ownerId: "inside" }, hash: "h6", isSynced: true, isErased: false },
+                        { entityName: "revisions", entityId: "r1", noteId: "outside", hash: "h7", isSynced: true, isErased: false },
+                        { entityName: "note_reordering", entityId: "inside", hash: "N/A", isSynced: true, isErased: false }
+                    ]
+                }
+            } as WebSocketMessage;
+
+            provider.sendMessageToAllClients(message);
+
+            expect(tagged.sent).toHaveLength(1);
+            const received = JSON.parse(tagged.sent[0]);
+            expect(received.data.entityChanges.map((c: any) => `${c.entityName}:${c.entityId}`)).toEqual([
+                "notes:inside",
+                "branches:b1",
+                "attachments:att1",
+                "note_reordering:inside"
+            ]);
+        });
+
+        it("drops an entity type it cannot map to a note, keeping the rest of the message", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+
+            const message = {
+                type: "frontend-update",
+                data: {
+                    lastSyncedPush: 1,
+                    entityChanges: [
+                        { entityName: "notes", entityId: "inside", hash: "h1", isSynced: true, isErased: false },
+                        { entityName: "options", entityId: "theme", hash: "h2", isSynced: true, isErased: false },
+                        { entityName: "blobs", entityId: "blob1", hash: "h3", isSynced: true, isErased: false },
+                        { entityName: "etapi_tokens", entityId: "tok1", hash: "h4", isSynced: true, isErased: false }
+                    ]
+                }
+            } as WebSocketMessage;
+
+            provider.sendMessageToAllClients(message);
+
+            const received = JSON.parse(tagged.sent[0]);
+            expect(received.data.entityChanges.map((c: any) => c.entityName)).toEqual(["notes"]);
+        });
+
+        it("sends nothing to a tagged connection when filtering empties the message", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+            const untagged = connect(server);
+
+            const message = {
+                type: "frontend-update",
+                data: {
+                    lastSyncedPush: 1,
+                    entityChanges: [
+                        { entityName: "notes", entityId: "outside", hash: "h1", isSynced: true, isErased: false },
+                        { entityName: "options", entityId: "theme", hash: "h2", isSynced: true, isErased: false }
+                    ]
+                }
+            } as WebSocketMessage;
+
+            provider.sendMessageToAllClients(message);
+
+            expect(tagged.sent).toHaveLength(0);
+            // The same emptied message still goes untouched to a connection nobody tagged.
+            expect(untagged.sent).toHaveLength(1);
+        });
+
+        it("passes the broadcasts a slice still needs through unchanged", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+            const message = { type: "sync-finished", lastSyncedPush: 5 } as WebSocketMessage;
+
+            provider.sendMessageToAllClients(message);
+
+            expect(tagged.sent).toEqual([JSON.stringify(message)]);
+        });
+
+        it("drops a broadcast that would name or carry something from outside the slice", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+            const untagged = connect(server);
+
+            for (const message of [
+                { type: "openNote", noteId: "somewhereElse" },
+                { type: "toast", message: { title: "t", message: "m" } },
+                { type: "api-log-messages", noteId: "somewhereElse", messages: [ "secret" ] },
+                { type: "execute-script", script: "api.doThing()" }
+            ] as WebSocketMessage[]) {
+                provider.sendMessageToAllClients(message);
+            }
+
+            expect(tagged.sent).toHaveLength(0);
+            expect(untagged.sent).toHaveLength(4);
+        });
+    });
+
     describe("sendMessageToClient", () => {
         it("returns false for an unknown client", () => {
             init();
@@ -236,14 +392,14 @@ describe("WebSocketMessagingProvider", () => {
         it("returns false for a client that is not OPEN", () => {
             const { server } = init();
             const ws = makeSocket(CLOSED);
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
             expect(provider.sendMessageToClient("client-id", { type: "ping" } as any)).toBe(false);
         });
 
         it("sends and returns true for an OPEN client", () => {
             const { server } = init();
             const ws = makeSocket(OPEN);
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
             expect(provider.sendMessageToClient("client-id", { type: "ping" } as any)).toBe(true);
             expect(ws.sent).toHaveLength(1);
         });
@@ -266,7 +422,7 @@ describe("WebSocketMessagingProvider", () => {
         it("closes the server and clears the client map", () => {
             const { server } = init();
             const ws = makeSocket(OPEN);
-            server.emit("connection", ws, {});
+            server.emit("connection", ws, { headers: {} });
 
             provider.dispose();
             expect(server.closed).toBe(true);

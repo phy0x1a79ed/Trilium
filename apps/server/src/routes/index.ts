@@ -1,5 +1,5 @@
 import { BootstrapDefinition } from "@triliumnext/commons";
-import { attributes, BNote, getSharedBootstrapItems, icon_packs as iconPackService, options as optionService, password as passwordService, sql_init, task_states } from "@triliumnext/core";
+import { attributes, BNote, getSharedBootstrapItems, icon_packs as iconPackService, options as optionService, password as passwordService, slice, sql_init, task_states } from "@triliumnext/core";
 import type { Request, Response } from "express";
 
 import packageJson from "../../package.json" with { type: "json" };
@@ -41,8 +41,16 @@ export function bootstrap(req: Request, res: Response) {
     // login and then had every API call rejected with "Logged in session not found".
     const isElectronRenderer = isInternalElectronRequest(req);
     const sharedItems = getSharedBootstrapItems(assetPath, isDbInitialized);
+    // Set only when the awm edge stamped the slice headers on this request (see slice.ts); absent
+    // for every request a signed-in person makes, which keeps their payload exactly as it was.
+    const sliceContext = slice.readSliceContext(req.headers);
     const commonItems = {
         ...sharedItems,
+        ...(sliceContext ? {
+            sliceRootNoteId: sliceContext.rootNoteId,
+            sliceUser: sliceContext.user,
+            sliceCanWrite: sliceContext.canWrite
+        } : {}),
         // The setup wizard's password gate is exempted for exactly what `checkSetupAuth` exempts:
         // the trusted renderer, which is the application itself, and an instance already configured
         // to trust whoever can reach it. Asked for anywhere else, the screen would be holding out

@@ -5,6 +5,7 @@ import { oauthAccountLabel, oauthProviderDisplayName } from "../services/oauth_s
 import server from "../services/server";
 import toast from "../services/toast";
 import Component from "./component";
+import slice from "../services/slice.js";
 
 // TODO: Deduplicate.
 interface CpuArchResponse {
@@ -23,6 +24,11 @@ export class StartupChecks extends Component {
 
     async checkCpuArchMismatch() {
         try {
+            if (slice.isSlice()) {
+                // An operator's check of the machine, which a visitor neither runs nor may read.
+                return;
+            }
+
             const response = await server.get("system-checks") as CpuArchResponse;
             if (response.isCpuArchMismatch) {
                 this.triggerCommand("showCpuArchWarning", {});

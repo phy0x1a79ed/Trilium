@@ -188,6 +188,17 @@ describe("buildNoteContextStatesFromUrl", () => {
 
         expect(states.map((s) => s.active)).toEqual([false, true]);
     });
+
+    it("opens and hoists to the slice's root, not the vault's, for a bare address inside a slice", () => {
+        (globalThis as any).glob.sliceRootNoteId = "slice-root-note";
+        try {
+            expect(buildNoteContextStatesFromUrl({}, "main1")).toMatchObject([
+                { notePath: "slice-root-note", hoistedNoteId: "slice-root-note", ntxId: "main1", active: true }
+            ]);
+        } finally {
+            (globalThis as any).glob.sliceRootNoteId = undefined;
+        }
+    });
 });
 
 describe("moving the focus between splits", () => {

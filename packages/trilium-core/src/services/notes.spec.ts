@@ -708,3 +708,61 @@ describe("prepareTitle", () => {
         expect(prepareTitle("")).toBe("");
     });
 });
+
+/**
+ * A write that arrives through a public slice: sanitised on the way in, and recorded as a revision
+ * carrying the visitor's name so the note's history says who wrote what.
+ */
+describe("updateNoteData through a slice", () => {
+    /** The revisions a note holds, newest last, with only the fields attribution cares about. */
+    function revisionsOf(noteId: string) {
+        return getSql().getRows<{ source: string; description: string }>(
+            "SELECT source, description FROM revisions WHERE noteId = ? ORDER BY utcDateCreated", [ noteId ]);
+    }
+
+    function write(noteId: string, content: string, visitor?: string) {
+        getContext().init(() => noteService.updateNoteData(noteId, content, [], visitor));
+    }
+
+    it("strips script a visitor pasted, and leaves the editor's own markup alone", () => {
+        const { note } = createNote("root", { title: "spec-slice-sanitise" });
+        write(note.noteId, '<p>hello</p><script>alert(1)</script><p onclick="x()">there</p>', "steven");
+
+        const stored = note.getContent();
+        expect(stored).not.toContain("<script");
+        expect(stored).not.toContain("onclick");
+        expect(stored).toContain("<p>hello</p>");
+    });
+
+    it("keeps a heading at the level the visitor left it, however often they save", () => {
+        const { note } = createNote("root", { title: "spec-slice-headings" });
+        write(note.noteId, "<h2>Title</h2><p>body</p>", "steven");
+        write(note.noteId, String(note.getContent()), "steven");
+
+        expect(note.getContent()).toContain("<h2>Title</h2>");
+    });
+
+    it("records the visitor's version, once per visitor per interval", () => {
+        const { note } = createNote("root", { title: "spec-slice-attribution" });
+        write(note.noteId, "<p>first</p>", "steven");
+
+        const authored = revisionsOf(note.noteId).filter(r => r.source === "slice");
+        expect(authored).toEqual([ { source: "slice", description: "steven" } ]);
+
+        // The editor saves on a debounce, so a second save moments later must not leave a second
+        // version -- but somebody else's first save always does.
+        write(note.noteId, "<p>second</p>", "steven");
+        write(note.noteId, "<p>third</p>", "petra");
+
+        expect(revisionsOf(note.noteId).filter(r => r.source === "slice"))
+            .toEqual([ { source: "slice", description: "steven" }, { source: "slice", description: "petra" } ]);
+    });
+
+    it("leaves an ordinary write untouched and unattributed", () => {
+        const { note } = createNote("root", { title: "spec-slice-ordinary" });
+        write(note.noteId, '<p>hello</p><script>alert(1)</script>');
+
+        expect(note.getContent()).toContain("<script>");
+        expect(revisionsOf(note.noteId).filter(r => r.source === "slice")).toEqual([]);
+    });
+});

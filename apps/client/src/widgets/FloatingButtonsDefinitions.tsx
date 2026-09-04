@@ -26,6 +26,7 @@ import NoItems from "./react/NoItems";
 import NoteLink from "./react/NoteLink";
 import RawHtml from "./react/RawHtml";
 import { isSplitEditorForcedReadOnly, resolveDisplayMode } from "./type_widgets/helpers/split_editor_mode";
+import slice from "../services/slice";
 
 export interface FloatingButtonContext {
     parentComponent: Component;
@@ -370,6 +371,11 @@ export function useBacklinkCount(note: FNote | null | undefined, isDefaultViewMo
 
     const refresh = useCallback(() => {
         if (!note || !isDefaultViewMode) return;
+
+        if (slice.isSlice()) {
+            // Backlinks reach in from the whole vault, so the count itself is outside the slice.
+            return;
+        }
 
         server.get<BacklinkCountResponse>(`note-map/${note.noteId}/backlink-count`).then(resp => {
             setBacklinkCount(resp.count);

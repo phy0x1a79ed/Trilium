@@ -6,6 +6,7 @@ import FBranch, { type FBranchRow } from "../entities/fbranch.js";
 import FNote, { type FNoteRow } from "../entities/fnote.js";
 import type { Froca } from "./froca-interface.js";
 import server from "./server.js";
+import slice from "./slice.js";
 import { isPreAuthScreen } from "./utils.js";
 
 interface SubtreeResponse {
@@ -49,7 +50,10 @@ class FrocaImpl implements Froca {
         // screens (isPreAuthScreen) — otherwise this fires an unauthenticated GET /api/tree (#10589).
         if (!glob.dbInitialized || isPreAuthScreen()) return;
 
-        const resp = await server.get<SubtreeResponse>("tree");
+        // A slice visitor never has access to the whole tree — the server refuses a bare "tree"
+        // request outside every slice — so this loads the slice's own subtree instead.
+        const sliceRootNoteId = slice.getSliceRootNoteId();
+        const resp = await server.get<SubtreeResponse>(sliceRootNoteId ? `tree?subTreeNoteId=${sliceRootNoteId}` : "tree");
         // clear the cache only directly before adding new content which is important for e.g., switching to protected session
         this.#clear();
         this.addResp(resp);

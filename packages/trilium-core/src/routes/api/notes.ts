@@ -9,6 +9,7 @@ import type BBranch from "../../becca/entities/bbranch.js";
 import { getLog } from "../../services/log.js";
 import noteFormatConversionService from "../../services/note_format_conversion.js";
 import noteService from "../../services/notes.js";
+import { ANONYMOUS_VISITOR, readSliceContext } from "../../services/slice.js";
 import { getSql } from "../../services/sql/index";
 import TaskContext from "../../services/task_context.js";
 import treeService from "../../services/tree.js";
@@ -142,8 +143,10 @@ function createNote(req: Request) {
 function updateNoteData(req: Request<{ noteId: string }>) {
     const { content, attachments } = req.body;
     const { noteId } = req.params;
+    const slice = readSliceContext(req.headers);
 
-    return noteService.updateNoteData(noteId, content, attachments);
+    return noteService.updateNoteData(noteId, content, attachments,
+        slice ? slice.user ?? ANONYMOUS_VISITOR : undefined);
 }
 
 /**
