@@ -15,10 +15,12 @@ import { t } from "../services/i18n.js";
 import noteCreateService from "../services/note_create.js";
 import noteTypesService from "../services/note_types.js";
 import server from "../services/server.js";
+import slice from "../services/slice.js";
 import toastService from "../services/toast.js";
 import treeService from "../services/tree.js";
 import utils from "../services/utils.js";
 import { showImageCompressionDialog } from "../widgets/dialogs/image_compression/image_compression_dialog.jsx";
+import { showShareSliceDialog } from "../widgets/dialogs/share_slice.jsx";
 import type NoteTreeWidget from "../widgets/note_tree.js";
 import contextMenu, { type MenuCommandItem, type MenuItem } from "./context_menu.js";
 import NoteColorPicker from "./custom-items/NoteColorPicker.jsx";
@@ -290,6 +292,15 @@ export async function buildTreeContextMenuItems(ctx: TreeContextMenuContext): Pr
             uiIcon: "bx bx-outline",
             enabled: parentNotSearch && isNotRoot && !isHoisted && notOptionsOrHelp
         },
+
+        // Left out entirely rather than shown disabled: on a Trilium that is not running behind awm
+        // there is nothing to mint a link through, so the entry would never become available.
+        slice.isSharingAvailable() ? {
+            title: t("tree-context-menu.share-as-slice"),
+            uiIcon: "bx bx-share-alt",
+            enabled: isNotRoot && notSearch && noSelectedNotes && notOptionsOrHelp,
+            handler: () => showShareSliceDialog(note.noteId, note.title)
+        } : null,
 
         {
             title: !isArchived ? t("tree-context-menu.archive") : t("tree-context-menu.unarchive"),

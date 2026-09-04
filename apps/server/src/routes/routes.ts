@@ -30,6 +30,7 @@ import onenoteImportRoute from "./api/onenote_import.js";
 import recoveryCodes from './api/recovery_codes.js';
 import senderRoute from "./api/sender.js";
 import setupRestoreRoute from "./api/setup_restore.js";
+import slicesApiRoutes from "./api/slices.js";
 import systemInfoRoute from "./api/system_info.js";
 import totp from './api/totp.js';
 import { doubleCsrfProtection as csrfMiddleware } from "./csrf_protection.js";
@@ -139,6 +140,12 @@ function register(app: express.Application) {
     apiRoute(PST, "/api/etapi-tokens", etapiTokensApiRoutes.createToken);
     apiRoute(PATCH, "/api/etapi-tokens/:etapiTokenId", etapiTokensApiRoutes.patchToken);
     apiRoute(DEL, "/api/etapi-tokens/:etapiTokenId", etapiTokensApiRoutes.deleteToken);
+
+    // Server-only: these reach the awm gateway over loopback, which the standalone build has no
+    // transport for. A slice visitor is refused all three -- `sliceMask` names none of them.
+    asyncApiRoute(GET, "/api/slices/:noteId", slicesApiRoutes.getSlices);
+    asyncApiRoute(PST, "/api/slices", slicesApiRoutes.createSlice);
+    asyncApiRoute(DEL, "/api/slices/:token", slicesApiRoutes.revokeSlice);
 
     // in case of local electron, local calls are allowed unauthenticated, for server they need auth
     const clipperMiddleware = isElectron ? [] : [auth.checkEtapiToken];

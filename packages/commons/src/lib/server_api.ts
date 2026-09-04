@@ -1016,6 +1016,12 @@ export type BootstrapDefinition = {
      */
     sliceCanWrite?: boolean;
     /**
+     * Whether this instance can mint slice links, which needs an awm gateway to mint them through
+     * and an edge origin to build them from. False on an ordinary Trilium, which gates the
+     * "Share as slice" affordance out of the tree entirely.
+     */
+    sliceSharingAvailable?: boolean;
+    /**
      * True for exactly one bootstrap after the owner binds their OAuth account, letting the client show a
      * one-shot "account connected" toast once the post-enrollment redirect lands on the app root.
      */
@@ -1091,3 +1097,38 @@ export interface NetworkAddressesResponse {
 }
 
 export type ScriptParams = any[];
+
+/**
+ * One slice link, as awm records it. A slice opens `noteId` and its descendants to somebody with no
+ * awm account; the token is the credential, so it lives in awm's own database and never on a note.
+ */
+export interface SliceInfo {
+    /** The credential in the link's path. Whoever holds it holds the slice. */
+    token: string;
+    noteId: string;
+    /** The visitor the link is bound to, or `null` for an open link anyone can follow. */
+    user: string | null;
+    /** Whether the link may edit note bodies. Nothing else is writable through a slice. */
+    write: boolean;
+    /** Seconds since the epoch, as awm stores them. */
+    createdAt: number;
+    expiresAt: number | null;
+    revokedAt: number | null;
+    /** Whether the link still resolves — neither revoked nor expired. */
+    active: boolean;
+    /** The link to hand over, built by awm from the edge's own public origin. */
+    url: string;
+}
+
+export interface CreateSliceRequest {
+    noteId: string;
+    /** Bind the link to one visitor. Omitted or empty mints an open link. */
+    user?: string;
+    write?: boolean;
+    /** Hours until the link stops resolving. Omitted mints a link that does not expire. */
+    expiresInHours?: number;
+}
+
+export interface SlicesResponse {
+    slices: SliceInfo[];
+}
