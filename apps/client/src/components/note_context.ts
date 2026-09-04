@@ -9,6 +9,7 @@ import type { ViewScope } from "../services/link.js";
 import options from "../services/options.js";
 import protectedSessionHolder from "../services/protected_session_holder.js";
 import server from "../services/server.js";
+import slice from "../services/slice.js";
 import { shouldRedirectPinnedNavigation } from "../services/tab_pinning.js";
 import treeService from "../services/tree.js";
 import utils from "../services/utils.js";
@@ -108,7 +109,7 @@ class NoteContext extends Component implements EventListener<"entitiesReloaded">
      */
     private contextData: Map<string, unknown> = new Map();
 
-    constructor(ntxId: string | null = null, hoistedNoteId: string = "root", mainNtxId: string | null = null) {
+    constructor(ntxId: string | null = null, hoistedNoteId: string = slice.defaultRootNoteId(), mainNtxId: string | null = null) {
         super();
 
         this.ntxId = ntxId || NoteContext.generateNtxId();
@@ -269,7 +270,8 @@ class NoteContext extends Component implements EventListener<"entitiesReloaded">
     }
 
     saveToRecentNotes(resolvedNotePath: string) {
-        if (options.is("databaseReadonly")) {
+        // A slice visitor is not the vault's owner and the mask names no route to record this.
+        if (options.is("databaseReadonly") || slice.isSlice()) {
             return;
         }
         setTimeout(async () => {
@@ -378,7 +380,7 @@ class NoteContext extends Component implements EventListener<"entitiesReloaded">
             return false;
         }
 
-        if (options.is("databaseReadonly")) {
+        if (options.is("databaseReadonly") || slice.isReadOnly()) {
             return true;
         }
 

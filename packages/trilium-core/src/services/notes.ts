@@ -18,6 +18,7 @@ import imageService from "./image.js";
 import { downloadImages, storeLinkPreviewPictures } from "./image_download.js";
 import noteTypesService from "./note_types.js";
 import optionService from "./options.js";
+import { sanitizeStoredHtml } from "./sanitizer.js";
 import revisionService from "./revisions.js";
 import { evaluateTemplateSafe } from "./safe_template.js";
 import { sanitizeHtml } from "./sanitizer.js";
@@ -1070,7 +1071,11 @@ function saveRevisionIfNeeded(note: BNote) {
     }
 }
 
-function updateNoteData(noteId: string, content: string, attachments: AttachmentRow[] = []) {
+/**
+ * @param sliceVisitor who to attribute the write to when it arrives through a public slice, which
+ *                     gets a revision of its own carrying their name. Absent for ordinary writes.
+ */
+function updateNoteData(noteId: string, content: string, attachments: AttachmentRow[] = [], sliceVisitor?: string) {
     const note = becca.getNote(noteId);
 
     if (!note || !note.isContentAvailable()) {
@@ -1079,7 +1084,11 @@ function updateNoteData(noteId: string, content: string, attachments: Attachment
 
     saveRevisionIfNeeded(note);
 
-    const { forceFrontendReload, content: newContent } = saveLinks(note, content);
+    // A stranger's bytes, opened later by a signed-in person with their session present. Sanitise
+    // on write rather than on render: the vault UI that renders this cannot tell where it came from.
+    const incoming = sliceVisitor ? sanitizeStoredHtml(content) : content;
+
+    const { forceFrontendReload, content: newContent } = saveLinks(note, incoming);
 
     note.setContent(newContent, { forceFrontendReload });
 
@@ -1102,6 +1111,34 @@ function updateNoteData(noteId: string, content: string, attachments: Attachment
                 }
             }
         }
+    }
+
+    if (sliceVisitor) {
+        saveSliceRevision(note, sliceVisitor);
+    }
+}
+
+/**
+ * Records what a slice visitor wrote as a revision carrying their name, so the note's history says
+ * who wrote what.
+ *
+ * This runs after the write and holds the new content, while `saveRevisionIfNeeded` runs before it
+ * and holds the old — so a note's first slice edit leaves two revisions, the state before anybody
+ * outside touched it and that visitor's version.
+ *
+ * Throttled per note and per visitor on the snapshot interval: the editor saves on a debounce, and
+ * one revision per save would bury the history. A different visitor's first save always makes its
+ * own.
+ */
+function saveSliceRevision(note: BNote, visitor: string) {
+    const interval = parseInt(optionService.getOption("revisionSnapshotTimeInterval"));
+    const cutoff = date_utils.utcDateTimeStr(new Date(Date.now() - interval * 1000));
+    const recent = getSql().getValue(
+        "SELECT revisionId FROM revisions WHERE noteId = ? AND source = 'slice' AND description = ? AND utcDateCreated >= ?",
+        [ note.noteId, visitor, cutoff ]);
+
+    if (!recent) {
+        note.saveRevision({ source: "slice", description: visitor });
     }
 }
 

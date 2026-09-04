@@ -3,6 +3,7 @@ import SpacedUpdate from "../services/spaced_update.js";
 import server from "../services/server.js";
 import options from "../services/options.js";
 import froca from "../services/froca.js";
+import slice from "../services/slice.js";
 import treeService from "../services/tree.js";
 import NoteContext from "./note_context.js";
 import appContext from "./app_context.js";
@@ -53,6 +54,11 @@ export default class TabManager extends Component {
             if (options.is("databaseReadonly")) {
                 return;
             }
+            if (slice.isSlice()) {
+                // The mask names no route that writes options, so a slice visitor could never
+                // persist their tabs anyway.
+                return;
+            }
 
             const openNoteContexts = this.noteContexts
                 .map((nc) => nc.getPojoState())
@@ -76,7 +82,9 @@ export default class TabManager extends Component {
 
     async loadTabs() {
         try {
-            const noteContextsToOpen = (appContext.isMainWindow && options.getJson("openNoteContexts")) || [];
+            // A slice visitor has no saved tabs of their own — `openNoteContexts` is the owner's,
+            // and can name notes and hoists outside the slice — so a slice always boots fresh.
+            const noteContextsToOpen = (appContext.isMainWindow && !slice.isSlice() && options.getJson("openNoteContexts")) || [];
 
             // preload all notes at once
             await froca.getNotes([...noteContextsToOpen.flatMap((tab: NoteContextState) =>
@@ -90,7 +98,7 @@ export default class TabManager extends Component {
                 }
 
                 if (!(openTab.hoistedNoteId in froca.notes)) {
-                    openTab.hoistedNoteId = "root";
+                    openTab.hoistedNoteId = slice.defaultRootNoteId();
                 }
 
                 return true;
@@ -271,7 +279,7 @@ export default class TabManager extends Component {
 
     async openEmptyTab(
         ntxId: string | null = null,
-        hoistedNoteId: string = "root",
+        hoistedNoteId: string = slice.defaultRootNoteId(),
         mainNtxId: string | null = null,
         pinned: boolean = false,
         placement: TabPlacement = "end"
@@ -372,7 +380,7 @@ export default class TabManager extends Component {
         } = {}
     ): Promise<NoteContext> {
         const noteContext = this.getActiveContext();
-        let hoistedNoteId = "root";
+        let hoistedNoteId = slice.defaultRootNoteId();
 
         if (noteContext) {
             const resolvedNotePath = await treeService.resolveNotePath(notePath, noteContext.hoistedNoteId);
@@ -403,7 +411,7 @@ export default class TabManager extends Component {
         const activate = !!opts.activate;
         const ntxId = opts.ntxId || null;
         const mainNtxId = opts.mainNtxId || null;
-        const hoistedNoteId = opts.hoistedNoteId || "root";
+        const hoistedNoteId = opts.hoistedNoteId || slice.defaultRootNoteId();
         const viewScope = opts.viewScope || { viewMode: "default" };
 
         const noteContext = await this.openEmptyTab(
@@ -979,8 +987,9 @@ export function buildNoteContextStatesFromUrl(
         },
         ...(parsed.splits ?? [])
     ];
-    // a bare boot with nothing in the address lands on root, but a pane torn off empty stays empty
-    const notePaths = panes.map((pane) => pane.notePath || (panes.length === 1 ? "root" : null));
+    // a bare boot with nothing in the address lands on root (the slice's root inside a slice), but
+    // a pane torn off empty stays empty
+    const notePaths = panes.map((pane) => pane.notePath || (panes.length === 1 ? slice.defaultRootNoteId() : null));
     const activeIdx = pickActivePane(notePaths, parsed.activeSplit ?? 0);
 
     const states: NoteContextState[] = panes.map((pane, idx) => ({
@@ -988,7 +997,7 @@ export function buildNoteContextStatesFromUrl(
         ntxId: idx === 0 ? mainNtxId : NoteContext.generateNtxId(),
         mainNtxId: idx === 0 ? null : mainNtxId,
         active: idx === activeIdx,
-        hoistedNoteId: pane.hoistedNoteId || "root",
+        hoistedNoteId: pane.hoistedNoteId || slice.defaultRootNoteId(),
         viewScope: pane.viewScope || {}
     }));
 

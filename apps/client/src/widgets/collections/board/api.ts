@@ -27,13 +27,7 @@ export default class BoardApi {
         private viewConfig: BoardViewData,
         private saveConfig: (newConfig: BoardViewData) => void,
         private setBranchIdToEdit: (branchId: string | undefined) => void,
-        private statusDefinition?: BoardStatusDefinition,
-        /**
-         * The columns this board has deleted or renamed away, shared with the view that resolves
-         * them. Owned by the view rather than by this object, which is rebuilt on every render and
-         * would forget a change before its own writes had landed.
-         */
-        private droppedColumns: Set<string> = new Set()
+        private statusDefinition?: BoardStatusDefinition
     ) {
         this.isRelationMode = statusAttribute.startsWith("~");
 
@@ -94,7 +88,6 @@ export default class BoardApi {
             ? { name: "deleteRelation", relationName: this.statusAttribute }
             : { name: "deleteLabel", labelName: this.statusAttribute };
         await executeBulkActions(noteIds, [ action ]);
-        this.droppedColumns.add(column);
         this.storeColumns((this.viewConfig?.columns ?? []).filter(col => col.value !== column));
     }
 
@@ -111,8 +104,6 @@ export default class BoardApi {
             ? { name: "updateRelationTarget", relationName: this.statusAttribute, targetNoteId: newValue }
             : { name: "updateLabelValue", labelName: this.statusAttribute, labelValue: newValue };
         await executeBulkActions(noteIds, [ action ]);
-
-        this.droppedColumns.add(oldValue);
 
         // Rename the column in the persisted data.
         this.storeColumns((this.viewConfig?.columns ?? [])
@@ -166,12 +157,6 @@ export default class BoardApi {
      * to disk but stay invisible until the view is re-entered.
      */
     private storeColumns(columns: BoardColumnData[]) {
-        // A column the board is asking for is one it is no longer dropping, so adding back a name
-        // that was deleted or renamed away works the way typing any other name does.
-        for (const { value } of columns) {
-            this.droppedColumns.delete(value);
-        }
-
         this.viewConfig = { ...this.viewConfig, columns };
         this.saveConfig(this.viewConfig);
         // Not awaited — every caller is the tail of a user gesture the board has already rendered —
@@ -188,14 +173,10 @@ export default class BoardApi {
      * Brings the board's own definition in line with the columns it shows, so that the same list is
      * what the promoted field offers, what the table view's dropdown offers, and what the board shows.
      *
-     * Called both when the user changes a column and on every render, because a column can appear
-     * without the board's column UI ever being used: a note given a new value from the table view, a
-     * script or a synced instance shows up as a column here, and the definition has to learn about it
-     * too. The render call is also what gives a newly created board its definition — nothing else
-     * would, since migration 0240 only ever saw the boards that existed when it ran.
-     *
-     * Writing only on a real difference is what makes that safe to call every time: the write lands as
-     * an entity change, which re-renders the board, which would write again.
+     * Called when the user changes a column, and once by the view to seed a board that has no
+     * definition at all — migration 0240 only ever saw the boards that existed when it ran. A render
+     * otherwise writes nothing, so a column that appears from outside the board's own UI shows here
+     * but reaches the definition only on the next column gesture, which stores the whole list.
      */
     async syncColumnsToDefinition(columns: string[]) {
         if (this.isRelationMode || !canStoreColumnsInDefinition(this.statusDefinition)) {

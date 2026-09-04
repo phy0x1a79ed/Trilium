@@ -9,6 +9,7 @@ import type { Entity } from "./frontend_script_api.js";
 import { WidgetDefinitionWithType } from "./frontend_script_api_preact.js";
 import { t } from "./i18n.js";
 import ScriptContext from "./script_context.js";
+import slice from "./slice.js";
 import server from "./server.js";
 import toastService, { showErrorForScriptNote } from "./toast.js";
 import utils, { causeChain, getErrorMessage, rootCauseMessage } from "./utils.js";
@@ -71,6 +72,11 @@ export async function executeBundle(bundle: Bundle, originEntity?: Entity | null
 }
 
 async function executeStartupBundles() {
+    // Frontend scripts are the vault's own, and a slice visitor may not run or fetch them.
+    if (slice.isSlice()) {
+        return;
+    }
+
     const isMobile = utils.isMobile();
     const scriptBundles = await server.get<Bundle[]>(`script/startup${  isMobile ? "?mobile=true" : ""}`);
 
@@ -145,6 +151,10 @@ export class WidgetsByParent {
 
 async function getWidgetBundlesByParent() {
     const widgetsByParent = new WidgetsByParent();
+
+    if (slice.isSlice()) {
+        return widgetsByParent;
+    }
 
     try {
         const scriptBundles = await server.get<Bundle[]>("script/widgets");

@@ -22,6 +22,8 @@ vi.mock("../services/open_id.js", () => ({
 }));
 vi.mock("../services/totp.js", () => ({ default: { isTotpEnabled: () => false } }));
 
+// A trimmed stand-in for trilium-core's real readSliceContext (packages/trilium-core/src/services/slice.ts):
+// same three header names, same shape, but with no becca dependency to drag into a route spec.
 vi.mock("@triliumnext/core", () => ({
     attributes: {},
     BNote: class {},
@@ -29,6 +31,19 @@ vi.mock("@triliumnext/core", () => ({
     icon_packs: { getIconPacks: () => [], generateCss: () => "", MIME_TO_EXTENSION_MAPPINGS: {} },
     options: { getOptionMap: () => ({}) },
     password: { isPasswordSet: () => true },
+    slice: {
+        readSliceContext: (headers: Record<string, string | undefined>) => {
+            const rootNoteId = headers["x-awm-slice-root"];
+            if (!rootNoteId) {
+                return null;
+            }
+            return {
+                rootNoteId,
+                user: headers["x-awm-slice-user"] ?? null,
+                canWrite: headers["x-awm-slice-write"] === "1"
+            };
+        }
+    },
     sql_init: { isDbInitialized: () => true },
     task_states: { generateTaskStateCss: () => "" },
     getLog: () => ({ info: () => {}, error: () => {} })
@@ -42,11 +57,15 @@ function makeReq(overrides: {
     query?: Record<string, unknown>;
     cookies?: Record<string, string>;
     userAgent?: string;
+    headers?: Record<string, string>;
 } = {}): Request {
     const req = {
         session: { loggedIn: overrides.loggedIn ?? false },
         query: overrides.query ?? {},
-        headers: overrides.userAgent ? { "user-agent": overrides.userAgent } : {},
+        headers: {
+            ...(overrides.userAgent ? { "user-agent": overrides.userAgent } : {}),
+            ...(overrides.headers ?? {})
+        },
         cookies: overrides.cookies ?? {}
     } as unknown as Request;
     if (overrides.internal) {
@@ -96,6 +115,40 @@ describe("bootstrap auth gating (desktop build, #10589)", () => {
         // absolute renderer-only URLs it can't derive from trilium-app://.
         expect(body().isElectron).toBe(true);
         expect(body().wsBaseUrl).toBeTruthy();
+    });
+});
+
+describe("bootstrap slice payload", () => {
+    it("leaves the payload exactly as it is today when the request carries no slice headers", () => {
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true }), res);
+
+        expect(body().sliceRootNoteId).toBeUndefined();
+        expect(body().sliceUser).toBeUndefined();
+        expect("sliceRootNoteId" in body()).toBe(false);
+        expect("sliceUser" in body()).toBe(false);
+    });
+
+    it("carries the slice root and visitor named by the edge's headers", () => {
+        const { res, body } = makeRes();
+        bootstrap(makeReq({
+            loggedIn: true,
+            headers: { "x-awm-slice-root": "sliceRoot1", "x-awm-slice-user": "Alice" }
+        }), res);
+
+        expect(body().sliceRootNoteId).toBe("sliceRoot1");
+        expect(body().sliceUser).toBe("Alice");
+    });
+
+    it("carries a null visitor for an open slice link nobody has named yet", () => {
+        const { res, body } = makeRes();
+        bootstrap(makeReq({
+            loggedIn: true,
+            headers: { "x-awm-slice-root": "sliceRoot1" }
+        }), res);
+
+        expect(body().sliceRootNoteId).toBe("sliceRoot1");
+        expect(body().sliceUser).toBeNull();
     });
 });
 

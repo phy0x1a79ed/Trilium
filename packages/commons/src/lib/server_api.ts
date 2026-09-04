@@ -1001,6 +1001,21 @@ export type BootstrapDefinition = {
     TRILIUM_SAFE_MODE: boolean;
     componentId?: string;
     /**
+     * The note an awm public slice link opens, taken from the edge's `x-awm-slice-root` header —
+     * never from anything the client sends. Omitted outside a slice.
+     */
+    sliceRootNoteId?: string;
+    /**
+     * Who the edge says is visiting a slice, from `x-awm-slice-user`. `null` for an open slice link
+     * nobody has named yet; omitted (like `sliceRootNoteId`) outside a slice.
+     */
+    sliceUser?: string | null;
+    /**
+     * Whether the slice link may edit note bodies, from `x-awm-slice-write`. Omitted outside a
+     * slice. Display only: the mask refuses the write either way.
+     */
+    sliceCanWrite?: boolean;
+    /**
      * True for exactly one bootstrap after the owner binds their OAuth account, letting the client show a
      * one-shot "account connected" toast once the post-enrollment redirect lands on the app root.
      */

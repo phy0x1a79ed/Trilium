@@ -1,6 +1,7 @@
 import "./mobile_layout.css";
 
 import type AppContext from "../components/app_context.js";
+import slice from "../services/slice.js";
 import GlobalMenuWidget from "../widgets/buttons/global_menu.js";
 import CloseZenModeButton from "../widgets/close_zen_button.js";
 import NoteList from "../widgets/collections/NoteList.jsx";
@@ -30,6 +31,11 @@ import { applyModals } from "./layout_commons.js";
 
 export default class MobileLayout {
     getRootWidget(appContext: typeof AppContext) {
+        // The launcher pane and quick search would only offer a visitor commands the slice mask
+        // refuses (jump to note, global search, settings, launcher config, new note): a slice
+        // visitor never sees them, on top of the mask that would 403 the request underneath.
+        const showLauncherPane = !slice.isSlice();
+
         const rootContainer = new RootContainer(true)
             .setParent(appContext)
             .class("horizontal-layout")
@@ -50,7 +56,7 @@ export default class MobileLayout {
                                 new FlexContainer("column")
                                     .filling()
                                     .id("mobile-sidebar-wrapper")
-                                    .child(new QuickSearchWidget())
+                                    .optChild(showLauncherPane, new QuickSearchWidget())
                                     .child(<MobileNoteNavigator />)
                             )
                     )
@@ -89,7 +95,7 @@ export default class MobileLayout {
                             )
                     )
             )
-            .child(
+            .optChild(showLauncherPane,
                 new FlexContainer("column")
                     .contentSized()
                     .id("mobile-bottom-bar")

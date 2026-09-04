@@ -6,6 +6,7 @@ import froca from "./froca.js";
 import { t } from "./i18n.js";
 import noteCreateService from "./note_create.js";
 import server from "./server.js";
+import slice from "./slice.js";
 import { escapeHtml } from "./utils.js";
 
 // this key needs to have this value, so it's hit by the tooltip
@@ -14,7 +15,8 @@ const SELECTED_NOTE_PATH_KEY = "data-note-path";
 const SELECTED_EXTERNAL_LINK_KEY = "data-external-link";
 
 // To prevent search lag when there are a large number of notes, set a delay based on the number of notes to avoid jitter.
-const notesCount = await server.get<number>(`autocomplete/notesCount`);
+// A slice has no autocomplete to tune, and the count is the size of a vault the visitor cannot see.
+const notesCount = slice.isSlice() ? 0 : await server.get<number>(`autocomplete/notesCount`);
 let debounceTimeoutId: ReturnType<typeof setTimeout>;
 
 function getSearchDelay(notesCount: number): number {
@@ -124,6 +126,12 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
 
     const activeNoteId = appContext.tabManager.getActiveContextNoteId();
     const length = term.trim().length;
+
+    // A slice may not search the vault, and every affordance that would offer this is hidden there.
+    if (slice.isSlice()) {
+        cb([]);
+        return;
+    }
 
     let results = await server.get<Suggestion[]>(`autocomplete?query=${encodeURIComponent(term)}&activeNoteId=${activeNoteId}&fastSearch=${fastSearch}`);
 

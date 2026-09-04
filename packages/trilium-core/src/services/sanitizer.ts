@@ -26,6 +26,26 @@ export function sanitizeHtml(dirtyHtml: string) {
         }
     }
 
+    return sanitizeHtmlCustom(dirtyHtml, { ...noteHtmlOptions(), transformTags });
+}
+
+/**
+ * The same allow-list, applied to content that is already inside the vault.
+ *
+ * Heading demotion is an import-time correction and is left out here: it fires on whichever heading
+ * levels the document contains, so running it on every save would push a note's headings one level
+ * down each time somebody edited it.
+ */
+export function sanitizeStoredHtml(dirtyHtml: string) {
+    return dirtyHtml ? sanitizeHtmlCustom(dirtyHtml, noteHtmlOptions()) : dirtyHtml;
+}
+
+export function sanitizeHtmlCustom(dirtyHtml: string, config: sanitize.IOptions) {
+    return sanitize(dirtyHtml, config);
+}
+
+/** What the vault accepts inside a note: tags, attributes, styles and schemes. */
+function noteHtmlOptions(): sanitize.IOptions {
     // Get allowed tags from options, with fallback to default list if option not yet set
     let allowedTags: readonly string[];
     try {
@@ -38,8 +58,7 @@ export function sanitizeHtml(dirtyHtml: string) {
     const colorRegex = [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/, /^hsl\(\s*(\d{1,3})\s*,\s*(\d{1,3})%\s*,\s*(\d{1,3})%\s*\)$/];
     const sizeRegex = [/^\d+\.?\d*(?:px|em|%)$/];
 
-    // to minimize document changes, compress H
-    return sanitizeHtmlCustom(dirtyHtml, {
+    return {
         allowedTags: allowedTags as string[],
         allowedAttributes: {
             "*": ["class", "style", "title", "src", "href", "hash", "disabled", "align", "alt", "center", "data-*"],
@@ -94,13 +113,8 @@ export function sanitizeHtml(dirtyHtml: string) {
         },
         selfClosing: [ "img", "br", "hr", "area", "base", "basefont", "input", "link", "meta", "col" ],
         allowedSchemes: ALLOWED_PROTOCOLS,
-        nonTextTags: ["head"],
-        transformTags
-    });
-}
-
-export function sanitizeHtmlCustom(dirtyHtml: string, config: sanitize.IOptions) {
-    return sanitize(dirtyHtml, config);
+        nonTextTags: ["head"]
+    };
 }
 
 export function sanitizeUrl(url: string) {

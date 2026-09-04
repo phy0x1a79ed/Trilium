@@ -4,10 +4,16 @@ import server from "../services/server.js";
 import Component from "./component.js";
 import froca from "../services/froca.js";
 import type { AttributeRow } from "../services/load_results.js";
+import slice from "../services/slice.js";
 
 export default class ShortcutComponent extends Component implements EventListener<"entitiesReloaded"> {
     constructor() {
         super();
+
+        // The notes carrying a shortcut are the vault's own, and naming them is not a slice's to do.
+        if (slice.isSlice()) {
+            return;
+        }
 
         server.get<AttributeRow[]>("keyboard-shortcuts-for-notes").then((shortcutAttributes) => {
             for (const attr of shortcutAttributes) {

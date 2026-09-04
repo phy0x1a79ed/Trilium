@@ -269,9 +269,10 @@ export default function buildHiddenSubtreeTemplates() {
                     // Deliberately no `label:status`: the columns a board shows are the options of a
                     // select definition, and a definition here would be shared by every board in the
                     // document — one board's columns would be everyone's. Each board owns its own
-                    // instead, written by the board view once it knows its columns (see
-                    // BoardApi#syncColumnsToDefinition) and by migration 0240 for boards that predate
-                    // it. `enforceAttributes` deletes the definition this template used to carry.
+                    // instead, seeded once by the board view the first time it finds no definition at
+                    // all (see BoardApi#syncColumnsToDefinition) and by migration 0240 for boards that
+                    // predate it. `enforceAttributes` deletes the definition this template used to
+                    // carry.
                 ],
                 children: [
                     {

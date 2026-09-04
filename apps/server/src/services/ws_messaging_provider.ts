@@ -1,5 +1,5 @@
-import type { WebSocketMessage } from "@triliumnext/commons";
-import { getLog, shouldLogMessage, type ClientMessageHandler, type MessagingProvider } from "@triliumnext/core";
+import type { EntityChange, WebSocketMessage } from "@triliumnext/commons";
+import { getLog, shouldLogMessage, slice, type ClientMessageHandler, type MessagingProvider } from "@triliumnext/core";
 import type { IncomingMessage, Server as HttpServer } from "http";
 import type express from "express";
 import { WebSocket, WebSocketServer } from "ws";
@@ -8,6 +8,12 @@ import config from "./config.js";
 import { randomString } from "./utils.js";
 
 type SessionParser = (req: IncomingMessage, params: {}, cb: () => void) => void;
+
+/**
+ * A live connection tagged with the slice it belongs to. `sliceContext` is `null` for every
+ * signed-in person's connection, which is ordinary traffic and passes through untouched.
+ */
+type ConnectedSocket = WebSocket & { id: string; sliceContext: slice.SliceContext | null };
 
 /**
  * A messaging provider that serves clients over the TCP HTTP listener and so
@@ -59,7 +65,11 @@ export default class WebSocketMessagingProvider implements HttpAttachableMessagi
 
         this.webSocketServer.on("connection", (ws, req) => {
             const id = randomString(10);
-            (ws as any).id = id;
+            const socket = ws as ConnectedSocket;
+            socket.id = id;
+            // Headers are only present on the upgrade request, which is why this is read here
+            // rather than later against the open connection.
+            socket.sliceContext = slice.readSliceContext(req.headers);
             this.clientMap.set(id, ws);
 
             console.log(`websocket client connected`);
@@ -109,18 +119,31 @@ export default class WebSocketMessagingProvider implements HttpAttachableMessagi
     }
 
     sendMessageToAllClients(message: WebSocketMessage): void {
+        if (!this.webSocketServer) {
+            return;
+        }
+
         const jsonStr = JSON.stringify(message);
 
-        if (this.webSocketServer) {
-            if (shouldLogMessage(message)) {
-                getLog().info(`Sending message to all clients: ${jsonStr}`);
+        if (shouldLogMessage(message)) {
+            getLog().info(`Sending message to all clients: ${jsonStr}`);
+        }
+
+        for (const client of this.webSocketServer.clients) {
+            if (client.readyState !== WebSocket.OPEN) {
+                continue;
             }
 
-            this.webSocketServer.clients.forEach((client) => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(jsonStr);
-                }
-            });
+            const context = (client as ConnectedSocket).sliceContext;
+            if (!context) {
+                client.send(jsonStr);
+                continue;
+            }
+
+            const scoped = scopeMessageToSlice(message, context);
+            if (scoped) {
+                client.send(JSON.stringify(scoped));
+            }
         }
     }
 
@@ -142,4 +165,66 @@ export default class WebSocketMessagingProvider implements HttpAttachableMessagi
         this.webSocketServer?.close();
         this.clientMap.clear();
     }
+}
+
+/**
+ * The note id that decides whether an entity change belongs to a slice, keyed by
+ * `entityChange.entityName`. An entity type absent here names no note at all, so a slice
+ * connection is never told about it — the same fail-closed rule `slice_mask.ts` applies to routes.
+ */
+function noteIdForSliceCheck(entityChange: EntityChange): string | null {
+    switch (entityChange.entityName) {
+        case "notes":
+            return entityChange.entityId;
+        case "note_reordering":
+            // `entityId` is the parent note whose children were reordered; see putNoteReorderingEntityChange.
+            return entityChange.entityId;
+        case "revisions":
+            return entityChange.noteId ?? null;
+        case "branches":
+            return (entityChange.entity as { noteId?: string } | undefined)?.noteId ?? null;
+        case "attributes":
+            return (entityChange.entity as { noteId?: string } | undefined)?.noteId ?? null;
+        case "attachments":
+            return (entityChange.entity as { ownerId?: string } | undefined)?.ownerId ?? null;
+        default:
+            // options, blobs, etapi_tokens, and any future entity type: dropped for a slice connection.
+            return null;
+    }
+}
+
+/**
+ * The message types a slice connection may receive. Everything else is dropped rather than listed
+ * as a hazard: `openNote` names a note the visitor cannot open, `toast`, `api-log-messages` and
+ * `execute-script` carry text and script from wherever the vault was working, and a type added
+ * later would otherwise reach a stranger's socket by default.
+ */
+const SLICE_MESSAGE_TYPES: ReadonlySet<WebSocketMessage["type"]> = new Set([
+    "frontend-update", "ping", "reload-frontend",
+    "sync-pull-in-progress", "sync-push-in-progress", "sync-finished", "sync-failed"
+]);
+
+/**
+ * Scopes a broadcast down to what one slice connection may see: a message type off the list above
+ * is dropped whole, and a `frontend-update` keeps only the entity changes `noteIdForSliceCheck` can
+ * place inside the slice. `null` says send nothing, rather than an empty update.
+ */
+function scopeMessageToSlice(message: WebSocketMessage, context: slice.SliceContext): WebSocketMessage | null {
+    if (!SLICE_MESSAGE_TYPES.has(message.type)) {
+        return null;
+    }
+    if (message.type !== "frontend-update") {
+        return message;
+    }
+
+    const entityChanges = message.data.entityChanges.filter(entityChange => {
+        const noteId = noteIdForSliceCheck(entityChange);
+        return noteId !== null && slice.isNoteInSlice(noteId, context.rootNoteId);
+    });
+
+    if (entityChanges.length === 0) {
+        return null;
+    }
+
+    return { ...message, data: { ...message.data, entityChanges } };
 }

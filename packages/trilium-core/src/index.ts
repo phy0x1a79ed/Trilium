@@ -82,6 +82,7 @@ export { default as getInstanceId } from "./services/instance_id";
 export type { CryptoProvider, ScryptOptions, Cipher } from "./services/encryption/crypto";
 export { default as note_types } from "./services/note_types";
 export { default as tree } from "./services/tree";
+export * as slice from "./services/slice";
 export { default as cloning } from "./services/cloning";
 export { default as handlers } from "./services/handlers";
 export { default as TaskContext } from "./services/task_context";

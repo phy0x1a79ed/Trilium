@@ -59,23 +59,25 @@ describe("Board data", () => {
         });
     });
 
-    it("shows no column the board has dropped, whatever the attachment still says", async () => {
+    it("resolves columns from the definition, the attachment and the notes together", async () => {
         const parentNote = buildNote({
             title: "Board",
             "#collection": "",
             "#viewType": "board",
-            children: [ { title: "One", "#status": "To Do" } ]
+            children: [ { title: "One", "#status": "Blocked" } ]
         });
 
         const data = await getBoardData(
             parentNote,
             "status",
-            { columns: [ { value: "To Do" }, { value: "Blocked" } ] },
+            { columns: [ { value: "To Do" } ] },
             false,
-            [ "To Do", "Blocked" ],
-            new Set([ "Blocked" ]));
+            [ "To Do", "Done" ]);
 
-        expect(data.columns).toEqual([ "To Do" ]);
-        expect([ ...data.byColumn.keys() ]).toEqual([ "To Do" ]);
+        expect(data.columns).toEqual([ "To Do", "Done", "Blocked" ]);
+        // byColumn is filled in two passes -- the notes scan first, so "Blocked" (the one column a
+        // note actually carries) is the first key, and the columns nothing carries follow in the
+        // order resolveBoardColumns settled on.
+        expect([ ...data.byColumn.keys() ]).toEqual([ "Blocked", "To Do", "Done" ]);
     });
 });

@@ -22,16 +22,13 @@ export type ColumnMap = Map<string, BoardCard[]>;
 /**
  * @param definitionOptions the choices the board's group-by definition offers, empty when it has no
  *                          select definition of its own to lead the column order.
- * @param droppedColumns the columns this board has deleted or renamed away and whose removal is
- *                       still in flight — see `resolveBoardColumns`.
  */
 export async function getBoardData(
     parentNote: FNote,
     groupByColumn: string,
     persistedData: BoardViewData,
     includeArchived: boolean,
-    definitionOptions: string[] = [],
-    droppedColumns: ReadonlySet<string> = new Set()
+    definitionOptions: string[] = []
 ) {
     const byColumn: ColumnMap = new Map();
 
@@ -39,7 +36,7 @@ export async function getBoardData(
     await recursiveGroupBy(parentNote.getChildBranches(), byColumn, groupByColumn, includeArchived, new Set<string>(), "");
 
     const persistedColumns = (persistedData.columns ?? []).map(c => c.value);
-    const columns = resolveBoardColumns(definitionOptions, persistedColumns, [ ...byColumn.keys() ], droppedColumns);
+    const columns = resolveBoardColumns(definitionOptions, persistedColumns, [ ...byColumn.keys() ]);
 
     // A column the notes have nothing in is still a column, so every resolved one gets an entry.
     for (const column of columns) {
@@ -48,18 +45,9 @@ export async function getBoardData(
         }
     }
 
-    // The attachment mirrors the resolved list, so a board whose columns now come from its definition
-    // stays readable by anything still reading the attachment. Written only when it actually differs,
-    // or every refresh would save.
-    const hasChanges = persistedColumns.length !== columns.length
-        || persistedColumns.some((value, index) => columns[index] !== value);
-
     return {
         byColumn,
         columns,
-        newPersistedData: hasChanges
-            ? { ...persistedData, columns: columns.map(value => ({ value })) }
-            : undefined,
         isInRelationMode: groupByColumn.startsWith("~")
     };
 }

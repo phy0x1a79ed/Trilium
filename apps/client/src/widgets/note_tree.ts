@@ -29,6 +29,7 @@ import treeService from "../services/tree.js";
 import utils from "../services/utils.js";
 import ws from "../services/ws.js";
 import NoteContextAwareWidget from "./note_context_aware_widget.js";
+import slice from "../services/slice.js";
 
 const TPL = /*html*/`
 <div class="tree-wrapper">
@@ -1562,7 +1563,10 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 
         branch.isExpanded = isExpanded;
 
-        server.put(`branches/${branchId}/expanded/${isExpanded ? 1 : 0}`);
+        // The expanded state belongs to the vault's owner, and a slice has no route to write it.
+        if (!slice.isSlice()) {
+            server.put(`branches/${branchId}/expanded/${isExpanded ? 1 : 0}`);
+        }
     }
 
     async reloadTreeFromCache() {

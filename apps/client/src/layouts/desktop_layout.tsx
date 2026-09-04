@@ -2,6 +2,7 @@ import type { AppContext } from "../components/app_context.js";
 import type { WidgetsByParent } from "../services/bundle.js";
 import { isExperimentalFeatureEnabled } from "../services/experimental_features.js";
 import options from "../services/options.js";
+import slice from "../services/slice.js";
 import utils from "../services/utils.js";
 import ApiLog from "../widgets/api_log.jsx";
 import ClosePaneButton from "../widgets/buttons/close_pane_button.js";
@@ -65,6 +66,10 @@ export default class DesktopLayout {
 
         const launcherPaneIsHorizontal = options.get("layoutOrientation") === "horizontal";
         const launcherPane = this.#buildLauncherPane(launcherPaneIsHorizontal);
+        // The launcher pane and quick search would only offer a visitor commands the slice mask
+        // refuses (jump to note, global search, settings, launcher config, new note): a slice
+        // visitor never sees them, on top of the mask that would 403 the request underneath.
+        const showLauncherPane = !slice.isSlice();
         const isElectron = utils.isElectron();
         const hasNativeTitleBar = window.glob.hasNativeTitleBar;
 
@@ -93,15 +98,15 @@ export default class DesktopLayout {
                     .css("background-color", "var(--launcher-pane-background-color)")
                     .setParent(appContext)
             )
-            .optChild(launcherPaneIsHorizontal, launcherPane)
+            .optChild(launcherPaneIsHorizontal && showLauncherPane, launcherPane)
             .child(
                 new FlexContainer("row")
                     .css("flex-grow", "1")
                     .id("horizontal-main-container")
-                    .optChild(!launcherPaneIsHorizontal, launcherPane)
+                    .optChild(!launcherPaneIsHorizontal && showLauncherPane, launcherPane)
                     .child(
                         new LeftPaneContainer()
-                            .optChild(!launcherPaneIsHorizontal, new QuickSearchWidget())
+                            .optChild(!launcherPaneIsHorizontal && showLauncherPane, new QuickSearchWidget())
                             .child(appContext.noteTreeWidget)
                             .child(...this.customWidgets.get("left-pane"))
                     )
