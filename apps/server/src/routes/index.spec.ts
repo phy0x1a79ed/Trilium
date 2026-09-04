@@ -180,6 +180,16 @@ describe("bootstrap slice payload", () => {
         expect(body().sliceSharingAvailable).toBe(false);
     });
 
+    it("never offers sharing inside a slice, whose visitor the mask refuses those routes", () => {
+        vi.stubEnv("AWM_HUB_URL", "http://127.0.0.1:7819/");
+        vi.stubEnv("AWM_EDGE_URL", "https://example.invalid");
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true, headers: { "x-awm-slice-root": "sliceRoot1" } }), res);
+
+        expect(body().sliceRootNoteId).toBe("sliceRoot1");
+        expect(body().sliceSharingAvailable).toBe(false);
+    });
+
     afterEach(() => vi.unstubAllEnvs());
 });
 
