@@ -10,6 +10,7 @@ import CreatePaneButton from "../widgets/buttons/create_pane_button.js";
 import GlobalMenu from "../widgets/buttons/global_menu.jsx";
 import LeftPaneToggle from "../widgets/buttons/left_pane_toggle.js";
 import MovePaneButton from "../widgets/buttons/move_pane_button.js";
+import ColorSchemeToggle from "../widgets/buttons/color_scheme_toggle.jsx";
 import RightPaneToggle from "../widgets/buttons/right_pane_toggle.jsx";
 import CloseZenModeButton from "../widgets/close_zen_button.jsx";
 import NoteList from "../widgets/collections/NoteList.jsx";
@@ -93,6 +94,7 @@ export default class DesktopLayout {
                     .optChild(launcherPaneIsHorizontal, <LeftPaneToggle isHorizontalLayout={true} />)
                     .child(<TabHistoryNavigationButtons />)
                     .child(new TabRowWidget().class("full-width"))
+                    .child(<ColorSchemeToggle />)
                     .optChild(isNewLayout, <RightPaneToggle />)
                     .css("height", "40px")
                     .css("background-color", "var(--launcher-pane-background-color)")
@@ -119,6 +121,7 @@ export default class DesktopLayout {
                                     .class("tab-row-container")
                                     .child(<TabHistoryNavigationButtons />)
                                     .child(new TabRowWidget())
+                                    .child(<ColorSchemeToggle />)
                                     .optChild(isNewLayout, <RightPaneToggle />)
                                     .css("height", "40px")
                                     .css("align-items", "center")

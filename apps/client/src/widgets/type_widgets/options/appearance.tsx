@@ -18,7 +18,7 @@ import FormList, { FormListHeader, FormListItem } from "../../react/FormList";
 import { FormTextBoxWithUnit } from "../../react/FormTextBox";
 import FormToggle from "../../react/FormToggle";
 import HelpButton from "../../react/HelpButton";
-import { useTriliumOption, useTriliumOptionBool } from "../../react/hooks";
+import { useColorSchemeSwitcher, useTriliumOption, useTriliumOptionBool } from "../../react/hooks";
 import Icon from "../../react/Icon";
 import Modal from "../../react/Modal";
 import SegmentedChoice, { SegmentedChoiceOption } from "../../react/SegmentedChoice";
@@ -66,10 +66,9 @@ const COLOR_SCHEMES: SegmentedChoiceOption<ColorScheme>[] = [
     { value: "dark", label: t("theme.color_scheme_dark"), icon: "bx-moon" }
 ];
 
-function resolveTheme(themeVal: string | null): { family: ThemeFamily | null; scheme: ColorScheme; isCustom: boolean } {
-    const { family: familyKey, scheme, isCustom } = resolveColorScheme(themeVal);
-    const family = THEME_FAMILIES.find(f => f.key === familyKey) ?? null;
-    return { family, scheme, isCustom };
+function resolveTheme(themeVal: string | null): { family: ThemeFamily | null; isCustom: boolean } {
+    const { family: familyKey, isCustom } = resolveColorScheme(themeVal);
+    return { family: THEME_FAMILIES.find(f => f.key === familyKey) ?? null, isCustom };
 }
 
 interface FontFamilyEntry {
@@ -166,14 +165,19 @@ function UserInterface() {
         ?? customThemes.find(ct => ct.val === theme)?.icon
         ?? "bx bx-palette";
 
+    // Light and dark belong to this browser, so the pane moves the same store the switcher does and
+    // keeps the option aligned with it — that is what a browser which has never chosen starts on.
+    const { scheme, setScheme } = useColorSchemeSwitcher();
+
     const setFamily = (family: ThemeFamily) => {
         // Keep current color scheme when switching families
-        setTheme(family.schemes[resolved.scheme]);
+        setTheme(family.schemes[scheme]);
     };
 
-    const setColorScheme = (scheme: ColorScheme) => {
+    const setColorScheme = (nextScheme: ColorScheme) => {
         if (resolved.family) {
-            setTheme(resolved.family.schemes[scheme]);
+            setScheme(nextScheme);
+            setTheme(resolved.family.schemes[nextScheme]);
         }
     };
 
@@ -228,7 +232,7 @@ function UserInterface() {
                     options={COLOR_SCHEMES}
                     // A custom theme brings its own colours, so the group highlights nothing rather
                     // than naming a scheme it is not following.
-                    currentValue={isCustom ? "" : resolved.scheme}
+                    currentValue={isCustom ? "" : scheme}
                     onChange={setColorScheme}
                     disabled={isCustom}
                     collapseOnMobile

@@ -1,4 +1,5 @@
 import { readCssVar } from "../utils/css-var.js";
+import { withStoredColorScheme } from "./color_scheme.js";
 
 export function getThemeStyle(): "auto" | "light" | "dark" {
     const configuredTheme = window.glob?.theme;
@@ -144,7 +145,10 @@ export async function applyThemeFromOptions() {
     // Imported lazily because this module is loaded by the entry point before jQuery is initialized;
     // a static import would pull options -> server -> i18n into the boot graph and crash on `$`.
     const { default: options } = await import("./options.js");
-    const theme = options.get("theme");
+    const configuredTheme = options.get("theme");
+    // Light and dark belong to this browser, so the option names the family and the store names
+    // which of its variants to render.
+    const theme = withStoredColorScheme(configuredTheme);
     if (BUILTIN_THEMES.has(theme)) {
         applyTheme(theme);
         return;
@@ -156,7 +160,7 @@ export async function applyThemeFromOptions() {
 
     // The theme may have changed again while the request was in flight; applying the stale
     // one now would override the latest choice (whose own invocation may already have run).
-    if (options.get("theme") !== theme) {
+    if (options.get("theme") !== configuredTheme) {
         return;
     }
 

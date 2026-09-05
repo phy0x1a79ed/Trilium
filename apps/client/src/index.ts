@@ -1,3 +1,4 @@
+import { withStoredColorScheme } from "./services/color_scheme";
 import { createFontStylesheetLink } from "./services/font";
 import { buildThemeStylesheetRefs, createStylesheetLink, getThemeStyle, initThemeChangeNotifier, StylesheetRef } from "./services/theme";
 
@@ -44,6 +45,9 @@ async function setupGlob() {
         device: json.device || getDevice()
     };
     window.glob.getThemeStyle = getThemeStyle;
+    // The `theme` option arrives with the vault's colour scheme; this browser's own choice replaces
+    // it here, before the stylesheets are built from it, so a reload paints it without a swap.
+    window.glob.theme = withStoredColorScheme(window.glob.theme);
 }
 
 function getDevice() {
