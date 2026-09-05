@@ -101,4 +101,75 @@ describe("Tree API (core)", () => {
             expect(attrs.some((a) => a.attributeId === "ghostAttr123")).toBe(false);
         });
     });
+
+    describe("inside a public slice", () => {
+        it("sends the shared subtree, a bare root to hang it from, and nothing else", async () => {
+            const shape = await buildNestedShape();
+            const res = await api.get<TreeResponse>("/api/tree", {
+                query: { subTreeNoteId: shape.sliceRoot },
+                headers: { "x-awm-slice-root": shape.sliceRoot }
+            });
+
+            expect(res.status).toBe(200);
+
+            const noteIds = res.body.notes.map((note) => note.noteId).sort();
+            expect(noteIds).toEqual([ "root", shape.child, shape.clonedChild, shape.sliceRoot ].sort());
+
+            // `root` is there only to hang the shared note from, so the branch that does it must
+            // arrive with it: `froca.addResp` drops a cached note's child branches before re-adding.
+            const branches = res.body.branches as BranchRowLike[];
+            expect(branches.some((branch) => branch.branchId === "none_root")).toBe(true);
+            const synthetic = branches.find((branch) => branch.noteId === shape.sliceRoot);
+            expect(synthetic).toMatchObject({ parentNoteId: "root", isExpanded: true });
+
+            // No branch names a parent the slice does not hold, so the clone's other parent is gone.
+            const parents = new Set(branches.map((branch) => branch.parentNoteId));
+            expect(parents).toEqual(new Set([ "none", "root", shape.sliceRoot ]));
+        });
+
+        it("refuses a subtree outside the slice and drops an outside id from a bulk load", async () => {
+            const shape = await buildNestedShape();
+
+            const refused = await api.get("/api/tree", {
+                query: { subTreeNoteId: shape.outer },
+                headers: { "x-awm-slice-root": shape.sliceRoot }
+            });
+            expect(refused.status).toBe(403);
+
+            const loaded = await api.post<TreeResponse>("/api/tree/load", {
+                body: { noteIds: [ shape.child, shape.elsewhere, "root" ] },
+                headers: { "x-awm-slice-root": shape.sliceRoot }
+            });
+            expect(loaded.status).toBe(200);
+            const noteIds = loaded.body.notes.map((note) => note.noteId);
+            expect(noteIds).toContain(shape.child);
+            expect(noteIds).not.toContain(shape.elsewhere);
+            expect(noteIds).not.toContain(shape.outer);
+        });
+    });
 });
+
+interface BranchRowLike {
+    branchId: string;
+    noteId: string;
+    parentNoteId: string;
+    isExpanded?: boolean;
+}
+
+/**
+ * `root > outer > middle > sliceRoot`, with `sliceRoot` and one of its two children each cloned
+ * under `elsewhere` — the shape the tree route used to answer with the whole vault.
+ */
+async function buildNestedShape() {
+    const outer = (await createTextNote(api, { title: "slice outer" })).noteId;
+    const middle = (await createTextNote(api, { parentNoteId: outer, title: "slice middle" })).noteId;
+    const sliceRoot = (await createTextNote(api, { parentNoteId: middle, title: "slice root" })).noteId;
+    const child = (await createTextNote(api, { parentNoteId: sliceRoot, title: "slice child" })).noteId;
+    const clonedChild = (await createTextNote(api, { parentNoteId: sliceRoot, title: "slice cloned child" })).noteId;
+    const elsewhere = (await createTextNote(api, { title: "slice elsewhere" })).noteId;
+
+    await api.put(`/api/notes/${sliceRoot}/clone-to-note/${elsewhere}`, { body: {} });
+    await api.put(`/api/notes/${clonedChild}/clone-to-note/${elsewhere}`, { body: {} });
+
+    return { outer, middle, sliceRoot, child, clonedChild, elsewhere };
+}

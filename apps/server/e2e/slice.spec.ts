@@ -32,7 +32,8 @@ test("a slice shows one subtree, refuses everything outside it, and signs what i
     await expect(app.launcherBar).toBeHidden();
 
     // A note outside the slice is refused, and so is a route the mask does not name.
-    for (const path of [ `/api/notes/${outsideNoteId}`, `/api/notes/${insideNoteId}/revisions`, "/api/tree" ]) {
+    for (const path of [ `/api/notes/${outsideNoteId}`, `/api/notes/${insideNoteId}/revisions`,
+                         `/api/tree?subTreeNoteId=root` ]) {
         expect(await statusOf(page, path)).toBe(403);
     }
     expect(await statusOf(page, `/api/notes/${insideNoteId}/title`, "PUT")).toBe(403);
@@ -83,6 +84,113 @@ function statusOf(page: import("@playwright/test").Page, path: string, method = 
         const response = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
         return response.status;
     }, { path, method, body });
+}
+
+/**
+ * The shape the first slice shipped blind to: the shared note nested three deep and cloned, with a
+ * cloned child of its own. A slice whose note is a direct child of `root` renders correctly whatever
+ * the tree route sends, which is why a leak of the whole vault went unseen.
+ */
+test("a nested, cloned slice shows its own subtree and offers nothing it cannot do", async ({ browser, page: ownerPage }) => {
+    const shape = await buildNestedSlice(ownerPage);
+
+    const context = await browser.newContext({
+        extraHTTPHeaders: {
+            "x-awm-slice-root": shape.sliceRootNoteId,
+            "x-awm-slice-user": VISITOR,
+            "x-awm-slice-write": "1"
+        }
+    });
+    const page = await context.newPage();
+    const app = new App(page, context);
+
+    // Nothing a slice reaches is refused, which is the whole of the philosophy in one assertion.
+    const refusals: string[] = [];
+    page.on("response", (response) => {
+        if (response.status() === 403 && new URL(response.url()).origin === new URL(getBaseUrl()).origin) {
+            refusals.push(`${response.request().method()} ${new URL(response.url()).pathname}`);
+        }
+    });
+
+    await app.goto();
+    await expect(app.noteTree).toBeVisible();
+
+    // The shared note is the only row at the top, and no ancestor of it is on screen.
+    const visibleTitles = page.locator(".tree-wrapper span.fancytree-node:visible .fancytree-title");
+    await expect(visibleTitles.first()).toHaveText(shape.titles.sliceRoot);
+    for (const absent of [ shape.titles.outer, shape.titles.middle, shape.titles.elsewhere, "Hidden Notes" ]) {
+        await expect(page.locator(".tree-wrapper .fancytree-title", { hasText: absent })).toHaveCount(0);
+    }
+
+    // Every affordance a slice cannot act on is absent rather than disabled.
+    for (const selector of [ ".add-note-button", ".unhoist-button", ".enter-workspace-button",
+                             ".tree-settings-button", ".ribbon-button-container" ]) {
+        await expect(page.locator(selector)).toHaveCount(0);
+    }
+
+    // Both children open, the cloned one included.
+    for (const title of [ shape.titles.child, shape.titles.clonedChild ]) {
+        await page.locator(".tree-wrapper .fancytree-title", { hasText: title }).first().click();
+        await expect(app.currentNoteSplitTitle).toHaveValue(title);
+    }
+
+    // Four entries, by equality: open in new tab, open in new split, open in popup, copy note path.
+    await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.child })
+        .first().click({ button: "right" });
+    await expect(page.locator("#context-menu-container .dropdown-item")).toHaveCount(4);
+
+    expect(refusals, "a slice offers nothing that is refused").toEqual([]);
+
+    await context.close();
+});
+
+/**
+ * `root > outer > middle > sliceRoot`, with `sliceRoot` cloned under `elsewhere` and one of its two
+ * children cloned there too — a note the slice holds by one branch and the vault by another.
+ */
+async function buildNestedSlice(page: import("@playwright/test").Page) {
+    const app = new App(page, page.context());
+    await app.goto();
+
+    const stamp = Date.now();
+    const titles = {
+        outer: `slice outer ${stamp}`,
+        middle: `slice middle ${stamp}`,
+        sliceRoot: `slice root ${stamp}`,
+        child: `slice child ${stamp}`,
+        clonedChild: `slice cloned child ${stamp}`,
+        elsewhere: `slice elsewhere ${stamp}`
+    };
+
+    const sliceRootNoteId = await page.evaluate(async (titles) => {
+        const csrfToken = (window as unknown as { glob?: { csrfToken?: string } }).glob?.csrfToken ?? "";
+        const headers = { "Content-Type": "application/json", "x-csrf-token": csrfToken };
+        const create = async (parentNoteId: string, title: string, type = "text") => {
+            const created = await (await fetch(`/api/notes/${parentNoteId}/children?target=into`, {
+                method: "POST", headers, body: JSON.stringify({ title, type, content: "<p>body</p>" })
+            })).json();
+            return created.note.noteId as string;
+        };
+        const cloneTo = (noteId: string, parentNoteId: string) =>
+            fetch(`/api/notes/${noteId}/clone-to-note/${parentNoteId}`, {
+                method: "PUT", headers, body: "{}"
+            });
+
+        const outer = await create("root", titles.outer);
+        const middle = await create(outer, titles.middle);
+        const sliceRoot = await create(middle, titles.sliceRoot);
+        await create(sliceRoot, titles.child);
+        // A code note, to pin that a writable slice is not limited to prose.
+        const clonedChild = await create(sliceRoot, titles.clonedChild, "code");
+        const elsewhere = await create("root", titles.elsewhere);
+
+        await cloneTo(sliceRoot, elsewhere);
+        await cloneTo(clonedChild, elsewhere);
+
+        return sliceRoot;
+    }, titles);
+
+    return { sliceRootNoteId, titles };
 }
 
 /**
