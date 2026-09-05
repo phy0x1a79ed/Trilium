@@ -168,25 +168,34 @@ export default class WebSocketMessagingProvider implements HttpAttachableMessagi
 }
 
 /**
- * The note id that decides whether an entity change belongs to a slice, keyed by
- * `entityChange.entityName`. An entity type absent here names no note at all, so a slice
- * connection is never told about it — the same fail-closed rule `slice_mask.ts` applies to routes.
+ * The note ids that decide whether an entity change belongs to a slice, keyed by
+ * `entityChange.entityName`. Every id returned must be inside the slice, so a branch is judged by
+ * both of its ends: `froca_updater` attaches the parent named by a branch change, and one whose
+ * parent lives elsewhere in the vault would graft that parent onto the visitor's tree. An entity
+ * type absent here names no note at all, so a slice connection is never told about it — the same
+ * fail-closed rule `slice_mask.ts` applies to routes.
  */
-function noteIdForSliceCheck(entityChange: EntityChange): string | null {
+function noteIdsForSliceCheck(entityChange: EntityChange): string[] | null {
     switch (entityChange.entityName) {
         case "notes":
-            return entityChange.entityId;
+            return [ entityChange.entityId ];
         case "note_reordering":
             // `entityId` is the parent note whose children were reordered; see putNoteReorderingEntityChange.
-            return entityChange.entityId;
+            return [ entityChange.entityId ];
         case "revisions":
-            return entityChange.noteId ?? null;
-        case "branches":
-            return (entityChange.entity as { noteId?: string } | undefined)?.noteId ?? null;
-        case "attributes":
-            return (entityChange.entity as { noteId?: string } | undefined)?.noteId ?? null;
-        case "attachments":
-            return (entityChange.entity as { ownerId?: string } | undefined)?.ownerId ?? null;
+            return entityChange.noteId ? [ entityChange.noteId ] : null;
+        case "branches": {
+            const branch = entityChange.entity as { noteId?: string; parentNoteId?: string } | undefined;
+            return branch?.noteId && branch?.parentNoteId ? [ branch.noteId, branch.parentNoteId ] : null;
+        }
+        case "attributes": {
+            const noteId = (entityChange.entity as { noteId?: string } | undefined)?.noteId;
+            return noteId ? [ noteId ] : null;
+        }
+        case "attachments": {
+            const ownerId = (entityChange.entity as { ownerId?: string } | undefined)?.ownerId;
+            return ownerId ? [ ownerId ] : null;
+        }
         default:
             // options, blobs, etapi_tokens, and any future entity type: dropped for a slice connection.
             return null;
@@ -206,7 +215,7 @@ const SLICE_MESSAGE_TYPES: ReadonlySet<WebSocketMessage["type"]> = new Set([
 
 /**
  * Scopes a broadcast down to what one slice connection may see: a message type off the list above
- * is dropped whole, and a `frontend-update` keeps only the entity changes `noteIdForSliceCheck` can
+ * is dropped whole, and a `frontend-update` keeps only the entity changes `noteIdsForSliceCheck` can
  * place inside the slice. `null` says send nothing, rather than an empty update.
  */
 function scopeMessageToSlice(message: WebSocketMessage, context: slice.SliceContext): WebSocketMessage | null {
@@ -218,8 +227,8 @@ function scopeMessageToSlice(message: WebSocketMessage, context: slice.SliceCont
     }
 
     const entityChanges = message.data.entityChanges.filter(entityChange => {
-        const noteId = noteIdForSliceCheck(entityChange);
-        return noteId !== null && slice.isNoteInSlice(noteId, context.rootNoteId);
+        const noteIds = noteIdsForSliceCheck(entityChange);
+        return noteIds !== null && noteIds.every(noteId => slice.isNoteInSlice(noteId, context.rootNoteId));
     });
 
     if (entityChanges.length === 0) {

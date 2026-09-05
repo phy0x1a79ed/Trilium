@@ -65,8 +65,8 @@ describe("Slice mask", () => {
         expect(run({ path: "/api/tree", query: { subTreeNoteId: ROOT } })).toBe("passed");
         expect(run({ path: "/api/tree", query: { subTreeNoteId: "inside" } })).toBe("passed");
         expect(run({ path: "/api/tree", query: { subTreeNoteId: OUTSIDE } })).toBe(403);
-        // No parameter means the whole tree from `root`, which is outside every slice.
-        expect(run({ path: "/api/tree" })).toBe(403);
+        // No parameter means the slice's own root, the way the route defaults too.
+        expect(run({ path: "/api/tree" })).toBe("passed");
     });
 
     it("narrows a bulk tree load to the ids inside the slice rather than refusing it", () => {
@@ -102,9 +102,10 @@ describe("Slice mask", () => {
         expect(run({ method: "DELETE", path: "/api/notes/inside", write: true })).toBe(403);
     });
 
-    it("refuses a write to anything that is not prose, even inside the slice", () => {
+    it("lets a writable slice edit a note of any type it holds", () => {
         expect(run({ path: "/api/notes/codeInside" })).toBe("passed");
-        expect(run({ method: "PUT", path: "/api/notes/codeInside/data", write: true })).toBe(403);
+        expect(run({ method: "PUT", path: "/api/notes/codeInside/data", write: true })).toBe("passed");
+        expect(run({ method: "PUT", path: "/api/notes/codeInside/data" })).toBe(403);
     });
 
     it("passes the application shell through and refuses to be written to around it", () => {

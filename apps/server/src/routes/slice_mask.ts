@@ -1,4 +1,3 @@
-import becca from "@triliumnext/core/src/becca/becca.js";
 // The subpath, not the barrel: this module loads with the router, and the barrel would pull every
 // core export in behind it before core is initialised.
 import * as slice from "@triliumnext/core/src/services/slice.js";
@@ -14,7 +13,8 @@ import type { NextFunction, Request, Response } from "express";
  * nobody can keep correct.
  *
  * Reads are the whole of it bar one route. A slice may edit note bodies and nothing else, so
- * exactly one route mutates, and only when the link permits writing.
+ * exactly one route mutates, and only when the link permits writing. A note inside the slice is
+ * writable whatever its type: what the link opens, the link opens.
  *
  * A request without the headers is ordinary traffic and passes untouched, which is every request a
  * signed-in person makes.
@@ -45,21 +45,7 @@ export function sliceMask(req: Request, res: Response, next: NextFunction) {
             return refuse(res, "this note is outside the slice");
         }
     }
-    if (rule.mutates && !noteIds.every(isProse)) {
-        return refuse(res, "a slice may only edit text notes");
-    }
     return next();
-}
-
-/**
- * Whether the note holds prose.
- *
- * A slice edits bodies, and only a text note's body is prose. Every other type holds content the
- * vault parses or renders in its own way -- a code note whose HTML a render note displays, a canvas
- * or mind map's JSON -- and none of it should be a stranger's to write.
- */
-function isProse(noteId: string): boolean {
-    return becca.notes[noteId]?.type === "text";
 }
 
 /** The ids a route names, or `null` when it names something this cannot resolve. */
@@ -86,12 +72,12 @@ const byAttachmentOwner: Locator = (params) => {
 const namesNothing: Locator = () => [];
 
 /**
- * The subtree the caller asked for, defaulting to what the route itself defaults to. A slice must
- * ask for a subtree inside itself, so the ordinary membership check answers the whole question and
- * a request for the tree from `root` is refused like any other note outside the slice.
+ * The subtree the caller asked for, defaulting to the slice's own root the way the route does. A
+ * slice must ask for a subtree inside itself, so the ordinary membership check answers the whole
+ * question and a request for the tree from `root` is refused like any other note outside it.
  */
-const bySubTreeQuery: Locator = (_params, req) =>
-    [ typeof req.query.subTreeNoteId === "string" ? req.query.subTreeNoteId : "root" ];
+const bySubTreeQuery: Locator = (_params, req, context) =>
+    [ typeof req.query.subTreeNoteId === "string" ? req.query.subTreeNoteId : context.rootNoteId ];
 
 /**
  * The ids in the body, narrowed to the ones inside the slice.
