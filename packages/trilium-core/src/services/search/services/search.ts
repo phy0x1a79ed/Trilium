@@ -299,7 +299,7 @@ function performSearch(expression: Expression, searchContext: SearchContext, ena
             throw new Error(`Can't find note path for note ${JSON.stringify(note.getPojo())}`);
         }
 
-        return new SearchResult(notePathArray);
+        return new SearchResult(inAncestor(notePathArray, note, searchContext.ancestorNoteId));
     });
 
     for (const res of searchResults) {
@@ -328,6 +328,20 @@ function performSearch(expression: Expression, searchContext: SearchContext, ena
     }
 
     return searchResults;
+}
+
+/**
+ * The path to offer for a note a search found inside `ancestorNoteId`.
+ *
+ * A cloned note has several paths and the expressions pick the best one in the whole vault, which
+ * for a note cloned outside the ancestor names notes the caller may not be able to reach — or, for
+ * a caller confined to that subtree, may not be allowed to see at all.
+ */
+function inAncestor(notePathArray: string[], note: BNote, ancestorNoteId?: string): string[] {
+    if (!ancestorNoteId || ancestorNoteId === "root" || notePathArray.includes(ancestorNoteId)) {
+        return notePathArray;
+    }
+    return note.getBestNotePath(ancestorNoteId) ?? notePathArray;
 }
 
 function mergeExactAndFuzzyResults(exactResults: SearchResult[], fuzzyResults: SearchResult[]): SearchResult[] {
@@ -690,14 +704,24 @@ function extractAttributeSnippet(noteId: string, searchTokens: string[], maxLeng
     }
 }
 
-function searchNotesForAutocomplete(query: string, fastSearch: boolean = true) {
+/**
+ * @param ancestorNoteId confines the search to one subtree, overriding the hoisted note. Callers
+ *     that enforce a boundary pass it; the hoisted note comes from a client header and cannot.
+ */
+function searchNotesForAutocomplete(query: string, fastSearch: boolean = true,
+                                    ancestorNoteId?: string) {
     const searchContext = new SearchContext({
         fastSearch,
         includeArchivedNotes: false,
         includeHiddenNotes: true,
         fuzzyAttributeSearch: true,
         ignoreInternalAttributes: true,
-        ancestorNoteId: hoistedNoteService.isHoistedInHiddenSubtree() ? "root" : hoistedNoteService.getHoistedNoteId()
+        // With `includeHiddenNotes` set, `getAncestorExp` builds no hidden-note exclusion once an
+        // ancestor is present. The `_hidden` subtree stays out of an ancestor-scoped search only
+        // because `BNote.getSubtree()` refuses to descend into it.
+        ancestorNoteId: ancestorNoteId ?? (hoistedNoteService.isHoistedInHiddenSubtree()
+            ? "root"
+            : hoistedNoteService.getHoistedNoteId())
     });
 
     const allSearchResults = findResultsWithQuery(query, searchContext);

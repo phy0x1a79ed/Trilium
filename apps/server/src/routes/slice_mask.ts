@@ -103,6 +103,12 @@ const RULES: Omit<Rule, "params">[] = [
     reads("/api/fonts", namesNothing),
     reads("/api/keyboard-actions", namesNothing),
 
+    // The one route whose boundary the handler draws rather than the locator: the path names no
+    // note, and `getAutocomplete` confines the search to the slice root by reading the same edge
+    // headers this mask reads. `matchPattern` counts segments, so `/api/autocomplete/notesCount`
+    // is not this rule and stays refused, as does every `/api/search` and `/api/quick-search` path.
+    reads("/api/autocomplete", namesNothing),
+
     reads("/api/tree", bySubTreeQuery),
     { method: "POST", pattern: "/api/tree/load", mutates: false, locate: byBodyNoteIds },
 

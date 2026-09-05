@@ -7,6 +7,7 @@ import FNote from "../../entities/fnote";
 import { t } from "../../services/i18n";
 import note_autocomplete from "../../services/note_autocomplete";
 import search from "../../services/search";
+import slice from "../../services/slice";
 import { isMobile } from "../../services/utils";
 import FormGroup from "../react/FormGroup";
 import NoteAutocomplete from "../react/NoteAutocomplete";
@@ -16,7 +17,9 @@ import { TypeWidgetProps } from "./type_widget";
 export default function Empty({ ntxId }: TypeWidgetProps) {
     return (
         <>
-            <WorkspaceSwitcher />
+            {/* Workspaces are found with a vault-wide search a slice is refused, so the row would
+                never hold anything. */}
+            {!slice.isSlice() && <WorkspaceSwitcher />}
             <NoteSearch ntxId={ntxId ?? null} />
         </>
     );
@@ -24,7 +27,9 @@ export default function Empty({ ntxId }: TypeWidgetProps) {
 
 function NoteSearch({ ntxId }: { ntxId: string | null }) {
     if (isMobile()) {
-        return <MobileNoteSearch />;
+        // The mobile placeholder opens the jump-to-note dialog, whose command list names actions
+        // across the whole vault.
+        return slice.isSlice() ? null : <MobileNoteSearch />;
     }
 
     return <DesktopNoteSearch ntxId={ntxId} />;
@@ -61,8 +66,8 @@ function DesktopNoteSearch({ ntxId }: { ntxId: string | null }) {
                     inputRef={autocompleteRef}
                     opts={{
                         hideGoToSelectedNoteButton: true,
-                        allowCreatingNotes: true,
-                        allowJumpToSearchNotes: true,
+                        allowCreatingNotes: !slice.isSlice(),
+                        allowJumpToSearchNotes: !slice.isSlice(),
                     }}
                     onChange={suggestion => {
                         if (!suggestion?.notePath) {

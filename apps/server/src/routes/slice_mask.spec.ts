@@ -46,11 +46,19 @@ describe("Slice mask", () => {
     });
 
     it("refuses every route the table does not name, which is how it fails closed", () => {
-        for (const path of [ "/api/notes/inside/revisions", "/api/search/anything", "/api/autocomplete",
+        for (const path of [ "/api/notes/inside/revisions", "/api/search/anything",
                              "/api/note-map/inside/backlinks", "/etapi/app-info",
                              "/share/inside", "/custom/anything", "/mcp" ]) {
             expect(run({ path })).toBe(403);
         }
+    });
+
+    it("admits the autocomplete search and nothing else under it", () => {
+        // The rule names no note; `getAutocomplete` confines the search to the slice root itself.
+        expect(run({ path: "/api/autocomplete", query: { query: "anything" } })).toBe("passed");
+        // The vault's note count, and every other search route, are a segment away and stay refused.
+        expect(run({ path: "/api/autocomplete/notesCount" })).toBe(403);
+        expect(run({ path: "/api/quick-search/anything" })).toBe(403);
     });
 
     it("refuses the routes that mint and revoke slices, so a link cannot make another link", () => {
