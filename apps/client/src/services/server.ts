@@ -1,5 +1,6 @@
 import { t } from "./i18n.js";
 import { getSetupAuthToken } from "./setup_auth.js";
+import slice from "./slice.js";
 import utils, { isShare } from "./utils.js";
 import ValidationError from "./validation_error.js";
 
@@ -295,6 +296,14 @@ function ajax(url: string, method: string, data: unknown, headers: Headers, opts
 }
 
 async function reportError(method: string, url: string, statusCode: number, response: unknown) {
+    if (slice.isSlice() && statusCode === 403) {
+        // The safety net behind the affordance removals: a slice is built so that nothing it can
+        // reach is refused, and a stranger reading "Forbidden" would be told about a boundary that
+        // is none of their business. Logged so the gap is still findable.
+        console.warn(`Slice refused: ${statusCode} ${method} ${url}`);
+        return;
+    }
+
     let message = response;
 
     if (typeof response === "string") {

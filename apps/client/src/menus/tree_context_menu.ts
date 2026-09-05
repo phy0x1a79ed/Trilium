@@ -112,6 +112,20 @@ export async function buildTreeContextMenuItems(ctx: TreeContextMenuContext): Pr
     const { note, branch, selectedNotes, isSpotlighted, target } = resolved;
     const isMobileTarget = target === "mobile";
 
+    if (slice.isSlice()) {
+        // Every other entry writes to the vault or reaches a route `slice_mask.ts` refuses, and a
+        // greyed row is still an affordance. Built here rather than filtered out of the list below,
+        // so an entry added by the next upstream merge is absent until somebody adds it.
+        const singleNote = resolved.selectedOrActiveNoteIds.length <= 1;
+
+        return [
+            { title: t("tree-context-menu.open-in-a-new-tab"), command: "openInTab", shortcut: "Ctrl+Click", uiIcon: "bx bx-link-external", enabled: singleNote },
+            { title: t("tree-context-menu.open-in-a-new-split"), command: "openNoteInSplit", uiIcon: "bx bx-dock-right", enabled: singleNote },
+            { title: t("tree-context-menu.open-in-popup"), command: "openNoteInPopup", uiIcon: "bx bx-edit", enabled: singleNote },
+            { title: t("tree-context-menu.copy-note-path-to-clipboard"), command: "copyNotePathToClipboard", uiIcon: "bx bx-directions", enabled: true }
+        ];
+    }
+
     const isNotRoot = note.noteId !== "root";
     const isHoisted = note.noteId === appContext.tabManager.getActiveContext()?.hoistedNoteId;
     const parentNote = isNotRoot ? await froca.getNote(branch.parentNoteId) : null;

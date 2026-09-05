@@ -24,7 +24,9 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         toggleCommand: "toggleRibbonTabClassicEditor",
         content: FormattingToolbar,
         activate: ({ note }) => !options.is("editedNotesOpenInRibbon") || !note?.hasOwnedLabel("dateNote"),
-        stayInDom: true
+        stayInDom: true,
+        // How a writable slice gets bold and italic.
+        availableInSlice: true
     },
     {
         title: ({ note }) => note?.isTriliumSqlite() ? t("script_executor.query") : t("script_executor.script"),
@@ -120,6 +122,7 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         icon: "bx bx-info-circle",
         show: ({ note }) => !!note,
         content: NoteInfoTab,
-        toggleCommand: "toggleRibbonTabNoteInfo"
+        toggleCommand: "toggleRibbonTabNoteInfo",
+        availableInSlice: true
     }
 ];

@@ -151,7 +151,7 @@ export default class DesktopLayout {
                                                             .optChild(isNewLayout, <NoteActions />))
                                                         .optChild(!isNewLayout, <LazyComponent loader={() => import("../widgets/ribbon/Ribbon.jsx")} />)
                                                         .child(new WatchedFileUpdateStatusWidget())
-                                                        .optChild(!isNewLayout, <FloatingButtons items={DESKTOP_FLOATING_BUTTONS} />)
+                                                        .optChild(!isNewLayout && !slice.isSlice(), <FloatingButtons items={DESKTOP_FLOATING_BUTTONS} />)
                                                         .child(
                                                             new ScrollingContainer()
                                                                 .filling()

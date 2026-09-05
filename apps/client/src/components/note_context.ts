@@ -340,7 +340,7 @@ class NoteContext extends Component implements EventListener<"entitiesReloaded">
     }
 
     async unhoist() {
-        await this.setHoistedNoteId("root");
+        await this.setHoistedNoteId(slice.defaultRootNoteId());
     }
 
     async setHoistedNoteId(noteIdToHoist: string) {

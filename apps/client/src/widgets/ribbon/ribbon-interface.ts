@@ -31,6 +31,12 @@ export interface TabConfiguration {
      * By default the tab content will not be rendered unless the tab is active (i.e. selected by the user). Setting to `true` will ensure that the tab is rendered even when inactive, for cases where the tab needs to be accessible at all times (e.g. for the detached editor toolbar) or if event handling is needed.
      */
     stayInDom?: boolean;
+    /**
+     * Whether a public slice shows this tab. Defaults to false: a slice writes nothing but a note
+     * body and reads only the routes `slice_mask.ts` names, so a tab is opted in one at a time
+     * rather than opted out.
+     */
+    availableInSlice?: boolean;
 }
 
 export async function shouldShowTab(showConfig: TabConfiguration["show"], context: TitleContext) {

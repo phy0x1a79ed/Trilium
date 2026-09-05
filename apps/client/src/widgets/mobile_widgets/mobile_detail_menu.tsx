@@ -7,6 +7,7 @@ import FNote, { NotePathRecord } from "../../entities/fnote";
 import { t } from "../../services/i18n";
 import note_create from "../../services/note_create";
 import server from "../../services/server";
+import slice from "../../services/slice";
 import { BacklinksWidget, useBacklinkCount } from "../FloatingButtonsDefinitions";
 import { getLocaleName, NoteInfoContent } from "../layout/StatusBar";
 import ActionButton from "../react/ActionButton";
@@ -38,6 +39,18 @@ export default function MobileDetailMenu() {
         requestAnimationFrame(() => {
             parentComponent.triggerCommand("closeThisNoteSplit", { ntxId });
         });
+    }
+
+    // Every entry behind this menu writes to the vault or calls a route `slice_mask.ts` refuses, so
+    // a visitor gets no menu — only the way out of a split, which is client-side.
+    if (slice.isSlice()) {
+        return isMainContext ? null : (
+            <ActionButton
+                icon="bx bx-x"
+                onClick={closePane}
+                text={t("close_pane_button.close_this_pane")}
+            />
+        );
     }
 
     return (

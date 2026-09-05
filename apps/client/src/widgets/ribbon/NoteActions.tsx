@@ -15,6 +15,7 @@ import { isExperimentalFeatureEnabled } from "../../services/experimental_featur
 import { t } from "../../services/i18n";
 import protected_session from "../../services/protected_session";
 import server from "../../services/server";
+import slice from "../../services/slice";
 import toast from "../../services/toast";
 import { isElectron as getIsElectron, isMac as getIsMac, isMobile as getIsMobile } from "../../services/utils";
 import ws from "../../services/ws";
@@ -35,6 +36,13 @@ const isNewLayout = isExperimentalFeatureEnabled("new-layout");
 
 export default function NoteActions() {
     const { note, ntxId, noteContext } = useNoteContext();
+
+    // Everything behind this menu writes to the vault, exports it or reaches a route a slice cannot
+    // call, so a visitor is shown no menu rather than one that refuses.
+    if (slice.isSlice()) {
+        return null;
+    }
+
     return (
         <div className="ribbon-button-container" style={{ contain: "none" }}>
             {isNewLayout && (

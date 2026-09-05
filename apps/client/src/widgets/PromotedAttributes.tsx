@@ -12,6 +12,7 @@ import { Attribute } from "../services/attribute_parser";
 import attributes from "../services/attributes";
 import { t } from "../services/i18n";
 import server from "../services/server";
+import slice from "../services/slice";
 import { randomString } from "../services/utils";
 import ws from "../services/ws";
 import LabelValueInput from "./attribute_widgets/label_value_input";
@@ -58,7 +59,10 @@ export default function PromotedAttributes({ omit }: {
     omit?: readonly string[];
 } = {}) {
     const { note, componentId, noteContext } = useNoteContext();
-    const [ cells, setCells ] = usePromotedAttributeData(note, componentId, noteContext);
+    // Each field writes through `PUT /api/notes/:noteId/attribute`, which `slice_mask.ts` does not
+    // name, so a visitor is shown no fields rather than fields that refuse.
+    const inSlice = slice.isSlice();
+    const [ cells, setCells ] = usePromotedAttributeData(inSlice ? null : note, componentId, noteContext);
     const shown = omit?.length ? cells?.filter((cell) => !omit.includes(cell.valueName)) : cells;
     return <PromotedAttributesContent note={note} componentId={componentId} cells={shown} setCells={setCells} />;
 }

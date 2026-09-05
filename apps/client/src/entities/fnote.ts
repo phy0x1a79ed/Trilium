@@ -7,6 +7,7 @@ import noteAttributeCache from "../services/note_attribute_cache.js";
 import protectedSessionHolder from "../services/protected_session_holder.js";
 import search from "../services/search.js";
 import server from "../services/server.js";
+import slice from "../services/slice.js";
 import utils from "../services/utils.js";
 import type FAttachment from "./fattachment.js";
 import type { AttributeType, default as FAttribute } from "./fattribute.js";
@@ -242,10 +243,13 @@ export default class FNote {
 
     /**
      * Returns true if the note's metadata (title, icon) should not be editable.
-     * This applies to system notes like options, help, and launch bar configuration.
+     * This applies to system notes like options, help, and launch bar configuration, and to every
+     * note in a public slice: `slice_mask.ts` names a route for the body and none for a title or
+     * an icon.
      */
     get isMetadataReadOnly() {
-        return utils.isLaunchBarConfig(this.noteId)
+        return slice.isSlice()
+            || utils.isLaunchBarConfig(this.noteId)
             || this.noteId.startsWith("_help_")
             || this.noteId.startsWith("_options");
     }
