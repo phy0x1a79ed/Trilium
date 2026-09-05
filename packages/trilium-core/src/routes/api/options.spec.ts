@@ -36,6 +36,31 @@ describe("Options API (core)", () => {
         vi.restoreAllMocks();
     });
 
+    it("answers a slice from its own allow-list, withholding what names notes or configures the vault", async () => {
+        const res = await api.get<Record<string, string>>("/api/options", {
+            headers: { "x-awm-slice-root": "root" }
+        });
+
+        expect(res.status).toBe(200);
+        // What the interface needs to paint the way the owner's does.
+        expect(res.body).toHaveProperty("theme");
+        expect(res.body).toHaveProperty("locale");
+        expect(res.body).toHaveProperty("mainFontSize");
+
+        // `openNoteContexts` and `hoistedNoteId` name notes from all over the vault; the rest is
+        // the owner's configuration, which is none of a visitor's business.
+        for (const withheld of [ "openNoteContexts", "hoistedNoteId", "syncServerHost", "syncProxy",
+                                 "customDbBackupDir", "llmProviders", "customSearchEngineUrl",
+                                 "mfaMethod", "isPasswordSet" ]) {
+            expect(res.body).not.toHaveProperty(withheld);
+        }
+
+        // Answered without running the whole-vault label search behind them.
+        expect(res.body.backendScriptingEnabled).toBe("false");
+        expect(res.body.sqlConsoleEnabled).toBe("false");
+        expect(res.body.hasUserBackendScripts).toBe("false");
+    });
+
     it("returns the allowed option map, isPasswordSet and skips read-only fields by default", async () => {
         const res = await api.get<Record<string, string>>("/api/options");
         expect(res.status).toBe(200);

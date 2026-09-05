@@ -12,6 +12,7 @@ import froca from "../../services/froca";
 import hoisted_note from "../../services/hoisted_note";
 import { t } from "../../services/i18n";
 import note_create from "../../services/note_create";
+import slice from "../../services/slice";
 import utils from "../../services/utils";
 import { NoteContent } from "../collections/legacy/ListOrGridView";
 import { Badge } from "../react/Badge";
@@ -262,18 +263,20 @@ export default function MobileNoteNavigator() {
                             <div className="mobile-navigator-current-header">
                                 <Icon icon={parentIcon ?? "bx bx-folder"} className="mobile-navigator-current-icon" />
                                 <span className="mobile-navigator-current-title">{parentTitle ?? parentNote.title}</span>
-                                <button
-                                    type="button"
-                                    className="mobile-navigator-current-action"
-                                    aria-label={t("mobile_note_navigator.add_child")}
-                                    title={t("mobile_note_navigator.add_child")}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (currentParentPath) note_create.createNote(currentParentPath);
-                                    }}
-                                >
-                                    <Icon icon="bx bx-plus" />
-                                </button>
+                                {!slice.isSlice() && (
+                                    <button
+                                        type="button"
+                                        className="mobile-navigator-current-action"
+                                        aria-label={t("mobile_note_navigator.add_child")}
+                                        title={t("mobile_note_navigator.add_child")}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (currentParentPath) note_create.createNote(currentParentPath);
+                                        }}
+                                    >
+                                        <Icon icon="bx bx-plus" />
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     className="mobile-navigator-current-action"

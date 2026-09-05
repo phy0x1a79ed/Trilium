@@ -9,6 +9,7 @@ import { changeLanguage } from "../../services/i18n.js";
 import { getLog } from "../../services/log.js";
 import optionService from "../../services/options.js";
 import searchService from "../../services/search/services/search.js";
+import { readSliceContext } from "../../services/slice.js";
 import { getSql } from "../../services/sql/index.js";
 import { ValidationError } from "../../errors.js";
 
@@ -169,14 +170,136 @@ const WRITE_ONLY_OPTIONS = new Set<string>([
     "anthropicApiKey"
 ]);
 
-function getOptions() {
+/**
+ * What a public slice may read.
+ *
+ * `ALLOWED_OPTIONS` answers what the Options dialog may write, which is a different question from
+ * what a stranger may know about the vault. This list is named rather than subtracted, so an option
+ * added by the next upstream merge is withheld from a slice until somebody decides otherwise.
+ *
+ * It carries what the interface needs to render the same way the owner's does — theme and chrome,
+ * fonts, code rendering, locale and date formatting, reading behaviour and the text-editor typing
+ * options. It carries nothing that names a note (`openNoteContexts`, `hoistedNoteId`), nothing
+ * about sync, backups, LLM providers or the search engine, and nothing about the login.
+ */
+const SLICE_READABLE_OPTIONS = new Set<OptionNames>([
+    // Theme and chrome
+    "theme",
+    "zoomFactor",
+    "overrideThemeFonts",
+    "backgroundEffects",
+    "backdropEffectsEnabled",
+    "motionEnabled",
+    "shadowsEnabled",
+    "smoothScrollEnabled",
+    "hardwareAccelerationEnabled",
+    "maxContentWidth",
+    "centerContent",
+    "layoutOrientation",
+    "newLayout",
+    "headingStyle",
+    "splitEditorOrientation",
+    "leftPaneWidth",
+    "leftPaneVisible",
+    "rightPaneWidth",
+    "rightPaneVisible",
+    "rightPaneCollapsedItems",
+    "rightPaneSelectedTab",
+    "rightPaneNoteMapType",
+    // Fonts
+    "mainFontSize",
+    "mainFontFamily",
+    "treeFontSize",
+    "treeFontFamily",
+    "detailFontSize",
+    "detailFontFamily",
+    "monospaceFontSize",
+    "monospaceFontFamily",
+    "monospaceLigaturesEnabled",
+    // Code rendering
+    "codeBlockTheme",
+    "codeBlockThemeMatchesApp",
+    "codeBlockThemeLight",
+    "codeBlockThemeDark",
+    "codeBlockWordWrap",
+    "codeBlockTabWidth",
+    "codeNoteTheme",
+    "codeNoteThemeMatchesApp",
+    "codeNoteThemeLight",
+    "codeNoteThemeDark",
+    "codeNoteTabWidth",
+    "codeNoteIndentWithTabs",
+    "codeNotesMimeTypes",
+    "codeLineWrapEnabled",
+    "vimKeymapEnabled",
+    // Locale and date formatting
+    "locale",
+    "formattingLocale",
+    "defaultContentLanguage",
+    "languages",
+    "customDateTimeFormat",
+    "firstDayOfWeek",
+    "firstWeekOfYear",
+    "minDaysInFirstWeek",
+    // Reading behaviour
+    "autoReadonlySizeText",
+    "autoReadonlySizeCode",
+    "minTocHeadings",
+    "highlightsList",
+    "treeScrollFollowNavigation",
+    "autoCollapseNoteTree",
+    "editedNotesOpenInRibbon",
+    "contentManagerSortOrder",
+    "contentManagerViewMode",
+    "downloadImagesAutomatically",
+    "includeNoteDefaultBoxSize",
+    "pdfSignatures",
+    // Text-editor typing
+    "textNoteEditorType",
+    "textNoteEditorMultilineToolbar",
+    "textNoteDoubleQuoteStyle",
+    "textNoteSingleQuoteStyle",
+    "textNotePunctuationReplacementsEnabled",
+    "textNoteMathReplacementsEnabled",
+    "textNoteSymbolReplacementsEnabled",
+    "textNoteCustomReplacements",
+    "textNoteEmojiCompletionEnabled",
+    "textNoteCompletionEnabled",
+    "textNoteSlashCommandsEnabled",
+    "textNoteContentHintsEnabled",
+    "textNoteAutoLinkPreviewsEnabled",
+    "textNoteHtmlSupportEnabled",
+    "clipboardImageEmbedEnabled",
+    "allowedHtmlTags",
+    "spellCheckEnabled",
+    "spellCheckLanguageCode"
+]);
+
+function getOptions(req: Request) {
+    const inSlice = readSliceContext(req.headers ?? {}) !== null;
     const optionMap = optionService.getOptionMap();
     const resultMap: Record<string, string> = {};
 
     for (const optionName in optionMap) {
-        if (isReadable(optionName)) {
+        if (inSlice ? isSliceReadable(optionName) : isReadable(optionName)) {
             resultMap[optionName] = optionMap[optionName as OptionNames];
         }
+    }
+
+    if (inSlice) {
+        // A visitor never reaches a console, a backend script or the settings that would run one,
+        // and `hasUserBackendScripts` is a whole-vault label search this answers without running.
+        resultMap["backendScriptingEnabled"] = "false";
+        resultMap["sqlConsoleEnabled"] = "false";
+        resultMap["hasUserBackendScripts"] = "false";
+
+        if (config.General.readOnly) {
+            resultMap["autoReadonlySizeText"] = "0";
+            resultMap["autoReadonlySizeCode"] = "0";
+            resultMap["databaseReadonly"] = "true";
+        }
+
+        return resultMap;
     }
 
     resultMap["isPasswordSet"] = optionMap["passwordVerificationHash"] ? "true" : "false";
@@ -288,6 +411,11 @@ function isReadable(name: string) {
         || name.startsWith("keyboardShortcuts")
         || name.endsWith("Collapsed")
         || name.startsWith("hideArchivedNotes");
+}
+
+/** Check if an option can be read by a public slice. */
+function isSliceReadable(name: string) {
+    return (SLICE_READABLE_OPTIONS as Set<string>).has(name);
 }
 
 /** Check if an option can be written by the client (PUT requests). */

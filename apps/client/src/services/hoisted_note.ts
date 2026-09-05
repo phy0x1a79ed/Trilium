@@ -4,11 +4,12 @@ import dialogService from "./dialog.js";
 import froca from "./froca.js";
 import type NoteContext from "../components/note_context.js";
 import { t } from "./i18n.js";
+import slice from "./slice.js";
 
 function getHoistedNoteId() {
     const activeNoteContext = appContext.tabManager.getActiveContext();
 
-    return activeNoteContext ? activeNoteContext.hoistedNoteId : "root";
+    return activeNoteContext ? activeNoteContext.hoistedNoteId : slice.defaultRootNoteId();
 }
 
 async function unhoist() {

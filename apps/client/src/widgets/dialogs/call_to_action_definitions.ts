@@ -1,6 +1,7 @@
 import appContext from "../../components/app_context";
 import { t } from "../../services/i18n";
 import options from "../../services/options";
+import slice from "../../services/slice";
 import utils, { isMac } from "../../services/utils";
 
 /**
@@ -111,6 +112,12 @@ const CALL_TO_ACTIONS: CallToAction[] = [
  * @returns a list iof call to actions to display to the user.
  */
 export function getCallToActions() {
+    // None in a public slice: every one of these invites the owner to configure something, and
+    // dismissing one writes `seenCallToActions`, which a slice cannot save.
+    if (slice.isSlice()) {
+        return [];
+    }
+
     const seenCallToActions = new Set(getSeenCallToActions());
 
     return CALL_TO_ACTIONS.filter((callToAction) =>

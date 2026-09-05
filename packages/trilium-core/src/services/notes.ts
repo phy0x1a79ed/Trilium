@@ -1086,7 +1086,9 @@ function updateNoteData(noteId: string, content: string, attachments: Attachment
 
     // A stranger's bytes, opened later by a signed-in person with their session present. Sanitise
     // on write rather than on render: the vault UI that renders this cannot tell where it came from.
-    const incoming = sliceVisitor ? sanitizeStoredHtml(content) : content;
+    // Only a text note, whose content is the HTML the vault renders — `sanitizeStoredHtml` over a
+    // code note's source or a canvas note's JSON would destroy it.
+    const incoming = sliceVisitor && note.type === "text" ? sanitizeStoredHtml(content) : content;
 
     const { forceFrontendReload, content: newContent } = saveLinks(note, incoming);
 

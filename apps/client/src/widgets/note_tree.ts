@@ -279,6 +279,12 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
         this.$followActiveNoteCheckbox = this.$treeSettingsPopup.find(".follow-active-note");
 
         this.$treeSettingsButton = this.$widget.find(".tree-settings-button");
+        if (slice.isSlice()) {
+            // The settings it saves are the owner's options, which a slice cannot write. The popup
+            // element itself stays — `refresh()` hides it unconditionally.
+            this.$treeSettingsButton.remove();
+            this.$treeSettingsPopup.remove();
+        }
         this.$treeSettingsButton.on("click", (e) => {
             if (this.$treeSettingsPopup.is(":visible")) {
                 this.$treeSettingsPopup.hide();
@@ -352,7 +358,9 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
     }
 
     get hideArchivedNotes() {
-        return options.is(`hideArchivedNotes_${this.treeName}`);
+        // Never in a slice: the option belongs to the owner, and an archived shared note would
+        // leave the visitor an empty tree.
+        return !slice.isSlice() && options.is(`hideArchivedNotes_${this.treeName}`);
     }
 
     async toggleArchivedNotes() {
@@ -387,7 +395,9 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
             titlesTabbable: true,
             keyboard: true,
             toggleEffect: options.is("motionEnabled") ? undefined : false,
-            extensions: ["dnd5", "clones", "filter"],
+            // A slice never loads `dnd5`: neutering its callbacks would still leave a live drop
+            // target, and an OS file drop never passes through `dragStart`.
+            extensions: slice.isSlice() ? ["clones", "filter"] : ["dnd5", "clones", "filter"],
             source: treeData,
             scrollOfs: {
                 top: 100,
@@ -953,9 +963,13 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
             node = this.getNodesByNoteId(hoistedNoteId)[0];
         }
 
-        const { branchIds } = await server.put<ExpandedSubtreeResponse>(`branches/${node.data.branchId}/expanded-subtree/${isExpanded ? 1 : 0}`);
+        const branchIds = slice.isSlice()
+            ? subtreeBranchIds(node.data.branchId)
+            : (await server.put<ExpandedSubtreeResponse>(`branches/${node.data.branchId}/expanded-subtree/${isExpanded ? 1 : 0}`)).branchIds;
 
-        froca.getBranches(branchIds, true).forEach((branch) => (branch.isExpanded = !!isExpanded));
+        for (const branch of froca.getBranches(branchIds, true)) {
+            branch.isExpanded = !!isExpanded;
+        }
 
         await this.batchUpdate(async () => {
             await node.load(true);
@@ -1870,7 +1884,38 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 
 }
 
+/**
+ * The branch ids at and under `branchId`, read from froca because a slice cannot ask the server to
+ * record an expansion. The visited set stops a note cloned under one of its own ancestors from
+ * walking forever.
+ */
+function subtreeBranchIds(branchId: string): string[] {
+    const collected: string[] = [];
+    const visited = new Set<string>();
+    const queue = [branchId];
+
+    while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current || visited.has(current)) {
+            continue;
+        }
+
+        visited.add(current);
+        collected.push(current);
+
+        const childBranches = froca.getBranch(current, true)?.getNoteFromCache()?.getChildBranches() ?? [];
+        for (const childBranch of childBranches) {
+            queue.push(childBranch.branchId);
+        }
+    }
+
+    return collected;
+}
+
 function buildEnhanceTitle() {
+    // A slice creates nothing, hoists nothing and never unhoists — unhoisting would put the whole
+    // vault back on screen — so those three buttons are never built rather than built and refused.
+    const offersTreeActions = !slice.isSlice();
     const createChildTemplate = document.createElement("span");
     createChildTemplate.className = "tree-item-button tn-icon add-note-button bx bx-plus";
     createChildTemplate.title = t("note_tree.create-child-note");
@@ -1900,7 +1945,7 @@ function buildEnhanceTitle() {
 
         const isHoistedNote = activeNoteContext && activeNoteContext.hoistedNoteId === note.noteId && note.noteId !== "root";
 
-        if (note.hasLabel("workspace") && !isHoistedNote) {
+        if (offersTreeActions && note.hasLabel("workspace") && !isHoistedNote) {
             const $enterWorkspaceButton = $(`<span class="tree-item-button tn-icon enter-workspace-button bx bx-door-open" title="${t("note_tree.hoist-this-note-workspace")}"></span>`).on(
                 "click",
                 cancelClickPropagation
@@ -1920,7 +1965,8 @@ function buildEnhanceTitle() {
 
         // TODO: Deduplicate with server's notes.ts#getAndValidateParent
         const isSubtreeHidden = note.isLabelTruthy("subtreeHidden");
-        if (!["search", "launcher"].includes(note.type)
+        if (offersTreeActions
+            && !["search", "launcher"].includes(note.type)
             && !note.isOptions()
             && !note.isLaunchBarConfig()
             && !note.noteId.startsWith("_help")
@@ -1932,7 +1978,7 @@ function buildEnhanceTitle() {
             node.span.append(createChildItem);
         }
 
-        if (isHoistedNote) {
+        if (offersTreeActions && isHoistedNote) {
             const $unhoistButton = $(`<span class="tree-item-button tn-icon unhoist-button bx bx-door-open" title="${t("note_tree.unhoist")}"></span>`).on("click", cancelClickPropagation);
 
             $span.append($unhoistButton);

@@ -1,5 +1,6 @@
 import "./ReadOnlyNoteInfoBar.css";
 import { t } from "../services/i18n";
+import slice from "../services/slice";
 import { useIsNoteReadOnly, useNoteContext, useTriliumEvent } from "./react/hooks"
 import Button from "./react/Button";
 import InfoBar from "./react/InfoBar";
@@ -9,6 +10,13 @@ export default function ReadOnlyNoteInfoBar(props: {}) {
     const { note, noteContext } = useNoteContext();
     const { isReadOnly, enableEditing } = useIsNoteReadOnly(note, noteContext);
     const isExplicitReadOnly = note?.isLabelTruthy("readOnly");
+
+    // A read-only slice is read-only for the whole visit, so the bar would offer an Edit button
+    // whose save `slice_mask.ts` refuses. A writable slice keeps the bar: it is the only way into
+    // a note the auto-read-only threshold has closed.
+    if (slice.isReadOnly()) {
+        return null;
+    }
 
     return (
         <InfoBar
@@ -22,8 +30,7 @@ export default function ReadOnlyNoteInfoBar(props: {}) {
                 ) : (
                     <div>
                         {t("read-only-info.auto-read-only-note")}
-                        {" "}
-                        <HelpButton helpPage="CoFPLs3dRlXc" />
+                        {!slice.isSlice() && <>{" "}<HelpButton helpPage="CoFPLs3dRlXc" /></>}
                     </div>
                 )}
 

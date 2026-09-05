@@ -2,9 +2,10 @@ import server from "./server.js";
 import appContext from "../components/app_context.js";
 import { formatShortcut, joinShortcut } from "./keyboard_shortcut_display.js";
 import shortcutService, { ShortcutBinding } from "./shortcuts.js";
+import slice from "./slice.js";
 import { isPreAuthScreen } from "./utils.js";
 import type Component from "../components/component.js";
-import type { ActionKeyboardShortcut } from "@triliumnext/commons";
+import type { ActionKeyboardShortcut, KeyboardActionNames } from "@triliumnext/commons";
 
 const keyboardActionRepo: Record<string, ActionKeyboardShortcut> = {};
 
@@ -30,9 +31,30 @@ async function getActions() {
 
 async function getActionsForScope(scope: string) {
     const actions = await keyboardActionsLoaded;
+    const inSlice = slice.isSlice();
 
-    return actions.filter((action) => action.scope === scope);
+    return actions.filter((action) => action.scope === scope
+        && (!inSlice || SLICE_ACTIONS.has(action.actionName)));
 }
+
+/**
+ * The actions a public slice binds keys for. Everything else creates, deletes, moves, searches or
+ * saves an option, none of which `slice_mask.ts` names a route for.
+ *
+ * Filtered here rather than at the loader, because the repository must stay complete: `getAction`
+ * throws on a name it does not hold, and tooltips still ask it for shortcuts.
+ */
+const SLICE_ACTIONS: ReadonlySet<KeyboardActionNames> = new Set([
+    "backInNoteHistory", "forwardInNoteHistory", "followLinkUnderCursor",
+    "scrollToActiveNote", "expandSubtree", "collapseTree", "collapseSubtree",
+    "openNewTab", "closeActiveTab", "reopenLastTab", "activateNextTab", "activatePreviousTab",
+    "firstTab", "secondTab", "thirdTab", "fourthTab", "fifthTab", "sixthTab", "seventhTab",
+    "eigthTab", "ninthTab", "lastTab",
+    "openNewNoteSplit", "closeActiveNoteSplit", "moveActiveNoteSplitLeft",
+    "moveActiveNoteSplitRight", "focusNoteSplitLeft", "focusNoteSplitRight",
+    "findInText", "copyWithoutFormatting", "printActiveNote", "reloadFrontendApp",
+    "toggleRibbonTabClassicEditor", "toggleRibbonTabNoteInfo"
+]);
 
 async function setupActionsForElement(scope: string, $el: JQuery<HTMLElement>, component: Component, ntxId: string | null | undefined) {
     if (!$el[0]) return [];

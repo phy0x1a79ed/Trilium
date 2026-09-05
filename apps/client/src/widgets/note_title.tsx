@@ -9,7 +9,6 @@ import { t } from "../services/i18n";
 import protected_session_holder from "../services/protected_session_holder";
 import server from "../services/server";
 import { isIMEComposing } from "../services/shortcuts";
-import slice from "../services/slice";
 import FormTextBox from "./react/FormTextBox";
 import { useNoteContext, useNoteProperty, useSpacedUpdate, useTriliumEvent, useTriliumEvents } from "./react/hooks";
 
@@ -28,8 +27,6 @@ export default function NoteTitleWidget(props: {className?: string}) {
             || note === undefined
             || (note.isProtected && !protected_session_holder.isProtectedSessionAvailable())
             || note.isMetadataReadOnly
-            // A slice edits bodies. The mask names no route that renames a note.
-            || slice.isSlice()
             || viewScope?.viewMode !== "default";
         setReadOnly(isReadOnly);
     }, [ note, note?.noteId, note?.isProtected, viewScope?.viewMode ]);

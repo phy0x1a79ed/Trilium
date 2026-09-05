@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
 import { EventNames } from "../../components/app_context";
+import slice from "../../services/slice";
 import { Indexed, numberObjectsInPlace } from "../../services/utils";
 import { useNoteContext, useNoteProperty, useStaticTooltipWithKeyboardShortcut, useTriliumEvents } from "../react/hooks";
 import NoteActions from "./NoteActions";
@@ -28,9 +29,10 @@ export default function Ribbon() {
     }), [ note, noteContext ]);
 
     async function refresh() {
+        const inSlice = slice.isSlice();
         const computedTabs: ComputedTab[] = [];
         for (const tab of TAB_CONFIGURATION) {
-            const shouldShow = await shouldShowTab(tab.show, titleContext);
+            const shouldShow = (!inSlice || tab.availableInSlice) && await shouldShowTab(tab.show, titleContext);
             computedTabs.push({
                 ...tab,
                 shouldShow: !!shouldShow
