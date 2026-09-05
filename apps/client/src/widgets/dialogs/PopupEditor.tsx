@@ -11,6 +11,7 @@ import { t } from "../../services/i18n";
 import tree from "../../services/tree";
 import utils from "../../services/utils";
 import NoteList from "../collections/NoteList";
+import slice from "../../services/slice";
 import FloatingButtons from "../FloatingButtons";
 import { DESKTOP_FLOATING_BUTTONS, POPUP_HIDDEN_FLOATING_BUTTONS } from "../FloatingButtonsDefinitions";
 import TitleRow from "../layout/TitleRow";
@@ -155,7 +156,7 @@ export default function PopupEditor() {
                         ? <MobileEditorToolbar inPopupEditor />
                         : <StandaloneRibbonAdapter component={FormattingToolbar} show={showFormattingToolbar} />}
 
-                    <FloatingButtons items={items} />
+                    {!slice.isSlice() && <FloatingButtons items={items} />}
                     <NoteDetail />
                     <NoteList media="screen" displayOnlyCollections />
                 </Modal>
