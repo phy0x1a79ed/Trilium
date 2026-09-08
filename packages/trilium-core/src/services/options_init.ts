@@ -185,6 +185,10 @@ const defaultOptions: DefaultOption[] = [
     { name: "codeLineWrapEnabled", value: "true", isSynced: false },
     { name: "codeNoteTabWidth", value: "4", isSynced: true },
     { name: "codeNoteIndentWithTabs", value: "false", isSynced: true },
+    { name: "codeNoteMultiCursorEnabled", value: "true", isSynced: false },
+    { name: "codeNoteMultiCursorModifier", value: "alt", isSynced: false },
+    { name: "codeNoteSelectOccurrencesEnabled", value: "true", isSynced: false },
+    { name: "codeNoteFoldShortcutsEnabled", value: "true", isSynced: false },
     {
         name: "codeNotesMimeTypes",
         value: '["text/x-csrc","text/x-c++src","text/x-csharp","text/css","text/x-elixir","text/x-go","text/x-groovy","text/x-haskell","text/html","message/http","text/x-java","text/javascript","application/javascript;env=frontend","application/javascript;env=backend","application/json","text/x-kotlin","text/x-markdown","text/x-perl","text/x-php","text/x-python","text/x-ruby",null,"text/x-sql","text/x-sqlite;schema=trilium","text/x-swift","text/xml","text/x-yaml","text/x-sh","application/typescript"]',

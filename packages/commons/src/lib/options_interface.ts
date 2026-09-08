@@ -173,6 +173,8 @@ export interface OptionDefinitions extends KeyboardShortcutsOptions<KeyboardActi
     /** Desktop only: when disabled, Electron starts with GPU hardware acceleration turned off (workaround for GPU driver incompatibilities that cause a blank window). Requires an app restart. */
     hardwareAccelerationEnabled: boolean;
     codeNoteTheme: string;
+    /** The modifier held to add a caret by clicking in the code editor. */
+    codeNoteMultiCursorModifier: "alt" | "ctrl";
     codeNoteThemeMatchesApp: boolean;
     codeNoteThemeLight: string;
     codeNoteThemeDark: string;
@@ -195,6 +197,15 @@ export interface OptionDefinitions extends KeyboardShortcutsOptions<KeyboardActi
     autoFixConsistencyIssues: boolean;
     vimKeymapEnabled: boolean;
     codeLineWrapEnabled: boolean;
+    /**
+     * Whether the code editor keeps more than one caret: modifier+click, Ctrl+Alt+Up/Down, and
+     * Shift+modifier+drag for a column selection. Off restores the browser's own selection painting.
+     */
+    codeNoteMultiCursorEnabled: boolean;
+    /** Whether Ctrl+D and Ctrl+Shift+L grow the selection onto matching occurrences. */
+    codeNoteSelectOccurrencesEnabled: boolean;
+    /** Whether Ctrl+Shift+[ and Ctrl+Shift+] fold and unfold the block at the cursor. */
+    codeNoteFoldShortcutsEnabled: boolean;
     leftPaneVisible: boolean;
     rightPaneVisible: boolean;
     nativeTitleBarVisible: boolean;

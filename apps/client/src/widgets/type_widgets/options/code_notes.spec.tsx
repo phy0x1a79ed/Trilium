@@ -18,9 +18,11 @@ vi.mock("@triliumnext/codemirror", () => ({
         setMimeType() {}
         setLineWrapping() {}
         setIndentSize() {}
+        setEditingFeatures() {}
         setTheme() {}
         destroy() {}
     },
+    toMultiCursorModifier: (value: string) => (value === "ctrl" ? "ctrl" : "alt"),
     ColorThemes: [
         { id: "one-light", name: "One Light", variant: "light" },
         { id: "solarized", name: "Solarized", variant: "light" },
@@ -131,5 +133,47 @@ describe("the code note editor settings", () => {
 
         act(() => void wrap?.dispatchEvent(new Event("input", { bubbles: true })));
         expect(mocks.saved).toContainEqual([ "codeLineWrapEnabled", true ]);
+    });
+});
+
+describe("the code note editing gestures", () => {
+    it("offers a toggle for each gesture", () => {
+        open();
+        expect(optionLabels()).toEqual(expect.arrayContaining([
+            "code-editor-options.multi_cursor",
+            "code-editor-options.select_occurrences",
+            "code-editor-options.fold_shortcuts"
+        ]));
+    });
+
+    it("asks which modifier adds a cursor only while multiple cursors are on", () => {
+        open();
+        expect(optionLabels()).not.toContain("code-editor-options.multi_cursor_modifier");
+
+        mocks.stored = { ...mocks.stored, codeNoteMultiCursorEnabled: true };
+        open();
+        expect(optionLabels()).toContain("code-editor-options.multi_cursor_modifier");
+    });
+
+    it("writes each gesture back to its own option", () => {
+        mocks.stored = { ...mocks.stored, codeNoteMultiCursorEnabled: true };
+        open();
+
+        for (const [ id, option ] of [
+            [ "select-occurrences", "codeNoteSelectOccurrencesEnabled" ],
+            [ "fold-shortcuts", "codeNoteFoldShortcutsEnabled" ]
+        ]) {
+            const toggle = host.querySelector<HTMLInputElement>(`input.switch-toggle[id^='${id}-']`);
+            act(() => void toggle?.dispatchEvent(new Event("input", { bubbles: true })));
+            expect(mocks.saved).toContainEqual([ option, true ]);
+        }
+
+        act(() => {
+            const modifier = host.querySelector<HTMLSelectElement>("select");
+            if (!modifier) return;
+            modifier.value = "ctrl";
+            modifier.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+        expect(mocks.saved).toContainEqual([ "codeNoteMultiCursorModifier", "ctrl" ]);
     });
 });
