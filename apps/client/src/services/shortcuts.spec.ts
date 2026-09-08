@@ -390,6 +390,42 @@ describe("shortcuts", () => {
             expect(stopPropagation).toHaveBeenCalled();
         });
 
+        it("should not call a global handler for a key the focused widget already handled", () => {
+            const handler = vi.fn();
+            shortcuts.bindGlobalShortcut("alt+a", handler, "test-namespace");
+
+            const [, listener] = mockElement.addEventListener.mock.calls[0];
+
+            // CodeMirror calls preventDefault() on every keystroke one of its keymap bindings
+            // handles, and the bubble reaches `document` afterwards.
+            const handled = new KeyboardEvent("keydown", { key: "a", code: "KeyA", altKey: true, cancelable: true });
+            handled.preventDefault();
+            listener(handled);
+            expect(handler).not.toHaveBeenCalled();
+
+            const unhandled = new KeyboardEvent("keydown", { key: "a", code: "KeyA", altKey: true, cancelable: true });
+            listener(unhandled);
+            expect(handler).toHaveBeenCalledWith(unhandled);
+        });
+
+        it("should still call an element-scoped handler for a key the widget handled", () => {
+            // Element bindings are the widget's own, so they keep firing on a key it prevented.
+            const mockEl = { addEventListener: vi.fn(), removeEventListener: vi.fn() };
+            const mockJQueryEl = [mockEl] as any;
+            mockJQueryEl.length = 1;
+
+            const handler = vi.fn();
+            shortcuts.bindElShortcut(mockJQueryEl, "alt+a", handler, "test-namespace");
+
+            const [, listener] = mockEl.addEventListener.mock.calls[0];
+
+            const event = new KeyboardEvent("keydown", { key: "a", code: "KeyA", altKey: true, cancelable: true });
+            event.preventDefault();
+            listener(event);
+
+            expect(handler).toHaveBeenCalledWith(event);
+        });
+
         it("should not call handler while IME is composing", () => {
             const handler = vi.fn();
             shortcuts.bindGlobalShortcut("ctrl+a", handler, "test-namespace");

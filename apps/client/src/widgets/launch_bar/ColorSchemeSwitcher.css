@@ -1,4 +1,5 @@
-.launcher-button.color-scheme-switcher {
+/* Both mounts of the switcher: the launcher and the tab-row toggle. */
+.color-scheme-switcher {
     &.unsupported {
         opacity: 0.5;
         cursor: default;

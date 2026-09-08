@@ -93,10 +93,19 @@ function removeGlobalShortcut(namespace: string) {
 }
 
 function bindGlobalShortcut(keyboardShortcut: string, handler: Handler | null, namespace: string | null = null) {
-    bindElShortcut($(document), keyboardShortcut, handler, namespace);
+    bindElShortcut($(document), keyboardShortcut, handler, namespace, { skipIfHandled: true });
 }
 
-function bindElShortcut($el: JQuery<ElementType | Element>, keyboardShortcut: string, handler: Handler | null, namespace: string | null = null) {
+interface ShortcutOptions {
+    /**
+     * Ignores a keystroke a focused widget has already acted on, detected through `defaultPrevented`.
+     * Set for `document`-level bindings only: an element-scoped binding is the widget's own, and
+     * `isAppShortcutChord` already describes how those two arrangements divide a modified key.
+     */
+    skipIfHandled?: boolean;
+}
+
+function bindElShortcut($el: JQuery<ElementType | Element>, keyboardShortcut: string, handler: Handler | null, namespace: string | null = null, options: ShortcutOptions = {}) {
     if (utils.isDesktop()) {
         keyboardShortcut = normalizeShortcut(keyboardShortcut);
 
@@ -120,6 +129,14 @@ function bindElShortcut($el: JQuery<ElementType | Element>, keyboardShortcut: st
                 // Skip processing if IME is composing to prevent shortcuts from
                 // interfering with text input in CJK languages
                 if (isIMEComposing(e)) {
+                    return;
+                }
+
+                // CodeMirror calls `preventDefault()` on every keystroke one of its keymap bindings
+                // handles. Window-scoped shortcuts reach `document` in the bubble phase afterwards,
+                // so without this Alt+A in a code note both toggles the block comment and opens the
+                // attributes ribbon.
+                if (options.skipIfHandled && e.defaultPrevented) {
                     return;
                 }
 

@@ -1,6 +1,6 @@
 import { indentUnit } from "@codemirror/language";
 import { EditorSelection, EditorState } from "@codemirror/state";
-import { EditorView, type ViewUpdate } from "@codemirror/view";
+import { EditorView, keymap, type ViewUpdate } from "@codemirror/view";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import CodeMirror, { type EditorConfig, getThemeById } from "./index.js";
@@ -86,10 +86,19 @@ describe("CodeMirror", () => {
             expect(editor.getText()).toBe("");
         });
 
-        it("concatenates every selected range", () => {
+        it("returns the main selected range, not every range concatenated", () => {
             editor = build();
             editor.setText("abcdef");
             editor.dispatch({ selection: EditorSelection.single(1, 3) });
+            expect(editor.getSelectedText()).toBe("bc");
+
+            // Joining unrelated ranges would seed the find box with a term matching nothing.
+            editor.dispatch({
+                selection: EditorSelection.create([
+                    EditorSelection.range(1, 3),
+                    EditorSelection.range(4, 6)
+                ], 0)
+            });
             expect(editor.getSelectedText()).toBe("bc");
 
             // With no selection there is nothing to return.
@@ -399,7 +408,100 @@ describe("CodeMirror", () => {
             expect(editor.getText()).toBe("line");
         });
     });
+
+    describe("editing features", () => {
+        it("enables the multiple-cursor gestures by default and drops them on request", () => {
+            editor = build();
+            expect(editor.state.facet(EditorState.allowMultipleSelections)).toBe(true);
+            expect(editor.state.facet(EditorView.clickAddsSelectionRange)).toHaveLength(1);
+
+            editor.destroy();
+            editor = build({ multiCursor: false });
+            expect(editor.state.facet(EditorState.allowMultipleSelections)).toBe(false);
+            expect(editor.state.facet(EditorView.clickAddsSelectionRange)).toHaveLength(0);
+        });
+
+        it("honours the configured add-cursor modifier", () => {
+            editor = build({ multiCursorModifier: "ctrl" });
+            const [ addsRange ] = editor.state.facet(EditorView.clickAddsSelectionRange);
+            expect(addsRange(new MouseEvent("mousedown", { ctrlKey: true }))).toBe(true);
+            expect(addsRange(new MouseEvent("mousedown", { altKey: true }))).toBe(false);
+        });
+
+        it("binds the occurrence-selection and folding keys, and unbinds them on request", () => {
+            editor = build();
+            expect(boundKeys(editor)).toEqual(expect.arrayContaining([ "Mod-d", "Shift-Mod-l", "Ctrl-Shift-[", "Ctrl-Shift-]" ]));
+
+            editor.destroy();
+            editor = build({ selectOccurrences: false, foldShortcuts: false });
+            const keys = boundKeys(editor);
+            expect(keys).not.toContain("Mod-d");
+            expect(keys).not.toContain("Ctrl-Shift-[");
+        });
+
+        it("leaves the app's own Alt chords unbound, keeping their macOS equivalents", () => {
+            // Back/forward in note history, the label editor and unhoist. CodeMirror's stock keymaps
+            // claim all four everywhere but macOS, where each carries a different `mac` chord.
+            editor = build();
+            const bindings = editor.state.facet(keymap).flat();
+            for (const key of [ "Alt-ArrowLeft", "Alt-ArrowRight", "Alt-l", "Alt-u" ]) {
+                expect(boundKeys(editor)).not.toContain(key);
+            }
+            expect(bindings.filter(({ mac }) => mac === "Ctrl-ArrowLeft" || mac === "Ctrl-ArrowRight")).toHaveLength(2);
+            expect(bindings.filter(({ mac }) => mac === "Ctrl-l" || mac === "Mod-Shift-u")).toHaveLength(2);
+        });
+
+        it("reconfigures the open editor when the options change", () => {
+            editor = build();
+            editor.setEditingFeatures({
+                multiCursor: false,
+                multiCursorModifier: "alt",
+                selectOccurrences: false,
+                foldShortcuts: false
+            });
+            expect(editor.state.facet(EditorState.allowMultipleSelections)).toBe(false);
+            expect(boundKeys(editor)).not.toContain("Mod-d");
+
+            editor.setEditingFeatures({
+                multiCursor: true,
+                multiCursorModifier: "ctrl",
+                selectOccurrences: true,
+                foldShortcuts: true
+            });
+            expect(editor.state.facet(EditorState.allowMultipleSelections)).toBe(true);
+            expect(boundKeys(editor)).toContain("Ctrl-Shift-[");
+            const [ addsRange ] = editor.state.facet(EditorView.clickAddsSelectionRange);
+            expect(addsRange(new MouseEvent("mousedown", { metaKey: true }))).toBe(true);
+        });
+
+        it("keeps every caret when several are placed", () => {
+            editor = build();
+            editor.setText("one\ntwo\nthree");
+            editor.dispatch({
+                selection: EditorSelection.create([
+                    EditorSelection.cursor(0),
+                    EditorSelection.cursor(4)
+                ])
+            });
+            expect(editor.state.selection.ranges).toHaveLength(2);
+
+            editor.destroy();
+            editor = build({ multiCursor: false });
+            editor.setText("one\ntwo\nthree");
+            editor.dispatch({
+                selection: EditorSelection.create([
+                    EditorSelection.cursor(0),
+                    EditorSelection.cursor(4)
+                ])
+            });
+            expect(editor.state.selection.ranges).toHaveLength(1);
+        });
+    });
 });
+
+function boundKeys(editor: CodeMirror) {
+    return editor.state.facet(keymap).flat().map(({ key }) => key);
+}
 
 function build(config: Partial<EditorConfig> = {}): CodeMirror {
     const parent = document.createElement("div");

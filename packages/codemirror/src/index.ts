@@ -1,13 +1,14 @@
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorView, highlightActiveLine, keymap, lineNumbers, placeholder, ViewPlugin, ViewUpdate, type EditorViewConfig, KeyBinding } from "@codemirror/view";
-import { defaultHighlightStyle, StreamLanguage, syntaxHighlighting, indentUnit, bracketMatching, foldGutter, codeFolding } from "@codemirror/language";
+import { defaultHighlightStyle, StreamLanguage, syntaxHighlighting, indentUnit, bracketMatching, foldGutter, foldKeymap, codeFolding } from "@codemirror/language";
 import { Compartment, EditorSelection, EditorState, StateEffect, type Extension } from "@codemirror/state";
-import { highlightSelectionMatches } from "@codemirror/search";
+import { highlightSelectionMatches, selectNextOccurrence, selectSelectionMatches } from "@codemirror/search";
 import { autocompletion, type CompletionSource } from "@codemirror/autocomplete";
 import { vim } from "@replit/codemirror-vim";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import byMimeType, { MIME_ALIASES } from "./syntax_highlighting.js";
 import smartIndentWithTab from "./extensions/custom_tab.js";
+import { drawnSelectionTheme, multipleSelections, type MultiCursorModifier } from "./extensions/multi_cursor.js";
 import type { ThemeDefinition } from "./color_themes.js";
 import { createSearchHighlighter, SearchHighlighter, searchMatchHighlightTheme } from "./find_replace.js";
 import { buildTypeCompletion, type ScriptApiContext } from "./type_completion/index.js";
@@ -15,6 +16,7 @@ import { buildTypeCompletion, type ScriptApiContext } from "./type_completion/in
 export { default as ColorThemes, type ThemeDefinition, type ThemeVariant, getThemeById } from "./color_themes.js";
 export { isScriptMime, type ScriptApiContext, SCRIPT_MIME_BACKEND, SCRIPT_MIME_FRONTEND } from "./type_completion/index.js";
 export { triliumLogHighlighter } from "./extensions/trilium_log_highlighter.js";
+export { toMultiCursorModifier, type MultiCursorModifier } from "./extensions/multi_cursor.js";
 
 // Custom keymap to prevent Ctrl+Enter from inserting a newline
 // This allows the parent application to handle the shortcut (e.g., for "Run Active Note")
@@ -25,6 +27,36 @@ const preventCtrlEnterKeymap: readonly KeyBinding[] = [
         run: () => true, // Return true to mark event as handled, preventing default newline insertion
         preventDefault: true
     }
+];
+
+// Keys the surrounding app owns, and that CodeMirror's stock keymaps would otherwise claim on every
+// platform but macOS (where each carries a `mac` field moving it to a different chord). Each is a
+// documented, app-wide Trilium affordance — back and forward in note history, the label editor, and
+// unhoist — against a CodeMirror convenience that VS Code does not bind at all.
+const APP_RESERVED_KEYS = new Set([ "Alt-ArrowLeft", "Alt-ArrowRight", "Alt-l", "Alt-u" ]);
+
+/**
+ * Drops the reserved keys' cross-platform binding while keeping the macOS one, so the keystroke
+ * bubbles to the app unhandled instead of being swallowed by the editor.
+ */
+function releaseAppKeys(bindings: readonly KeyBinding[]): readonly KeyBinding[] {
+    return bindings.map((binding) => {
+        if (!binding.key || !APP_RESERVED_KEYS.has(binding.key)) {
+            return binding;
+        }
+        const { key, ...withoutKey } = binding;
+        return withoutKey;
+    });
+}
+
+const editorDefaultKeymap = releaseAppKeys(defaultKeymap);
+const editorHistoryKeymap = releaseAppKeys(historyKeymap);
+
+// Ctrl+D is the browser's "bookmark this page" shortcut, so both bindings have to claim the event
+// even on the keypress that finds no further occurrence and returns false.
+const selectOccurrencesKeymap: readonly KeyBinding[] = [
+    { key: "Mod-d", run: selectNextOccurrence, preventDefault: true },
+    { key: "Shift-Mod-l", run: selectSelectionMatches, preventDefault: true }
 ];
 
 // Lint diagnostics (e.g. the TypeScript script linter or the Mermaid linter) can produce very
@@ -44,7 +76,19 @@ const lintTooltipTheme = EditorView.baseTheme({
 
 type ContentChangedListener = () => void;
 
-export interface EditorConfig {
+/** The VS Code editing gestures, each switchable from Options → Code notes. */
+export interface EditingFeatures {
+    /** Multiple cursors: modifier+click, Ctrl+Alt+Up/Down, and Shift+modifier+drag for a column. */
+    multiCursor: boolean;
+    /** The modifier held to add a caret by clicking. */
+    multiCursorModifier: MultiCursorModifier;
+    /** Binds Ctrl+D and Ctrl+Shift+L to grow the selection onto matching occurrences. */
+    selectOccurrences: boolean;
+    /** Binds Ctrl+Shift+[ and Ctrl+Shift+] to fold and unfold the block at the cursor. */
+    foldShortcuts: boolean;
+}
+
+export interface EditorConfig extends Partial<EditingFeatures> {
     parent: HTMLElement;
     placeholder?: string;
     lineWrapping?: boolean;
@@ -64,6 +108,27 @@ function buildIndentUnit(indentSize: number, useTabs: boolean) {
     return useTabs ? "\t" : " ".repeat(indentSize);
 }
 
+function buildEditingExtensions(features: Partial<EditingFeatures>): Extension {
+    const extensions: Extension[] = [];
+
+    if (features.multiCursor ?? true) {
+        extensions.push(multipleSelections(features.multiCursorModifier ?? "alt"));
+    }
+
+    const bindings: KeyBinding[] = [];
+    if (features.selectOccurrences ?? true) {
+        bindings.push(...selectOccurrencesKeymap);
+    }
+    if (features.foldShortcuts ?? true) {
+        bindings.push(...foldKeymap);
+    }
+    if (bindings.length) {
+        extensions.push(keymap.of(bindings));
+    }
+
+    return extensions;
+}
+
 export default class CodeMirror extends EditorView {
 
     private config: EditorConfig;
@@ -72,6 +137,7 @@ export default class CodeMirror extends EditorView {
     private themeCompartment: Compartment;
     private lineWrappingCompartment: Compartment;
     private indentUnitCompartment: Compartment;
+    private editingCompartment: Compartment;
     private searchHighlightCompartment: Compartment;
     private typeCompletionCompartment: Compartment;
     private completionSourceCompartment: Compartment;
@@ -92,6 +158,7 @@ export default class CodeMirror extends EditorView {
         const themeCompartment = new Compartment();
         const lineWrappingCompartment = new Compartment();
         const indentUnitCompartment = new Compartment();
+        const editingCompartment = new Compartment();
         const searchHighlightCompartment = new Compartment();
         const typeCompletionCompartment = new Compartment();
         const completionSourceCompartment = new Compartment();
@@ -120,10 +187,14 @@ export default class CodeMirror extends EditorView {
                 indentUnit.of(buildIndentUnit(config.indentSize ?? 4, !!config.useTabs)),
                 EditorState.tabSize.of(config.indentSize ?? 4)
             ]),
+            // After `themeCompartment` so a loaded CodeMirror theme outranks `drawnSelectionTheme`,
+            // and before the base keymap so the editing bindings are matched first.
+            drawnSelectionTheme,
+            editingCompartment.of(buildEditingExtensions(config)),
             keymap.of([
                 ...preventCtrlEnterKeymap,
-                ...defaultKeymap,
-                ...historyKeymap,
+                ...editorDefaultKeymap,
+                ...editorHistoryKeymap,
                 ...smartIndentWithTab
             ])
         ]
@@ -168,6 +239,7 @@ export default class CodeMirror extends EditorView {
         this.themeCompartment = themeCompartment;
         this.lineWrappingCompartment = lineWrappingCompartment;
         this.indentUnitCompartment = indentUnitCompartment;
+        this.editingCompartment = editingCompartment;
         this.searchHighlightCompartment = searchHighlightCompartment;
         this.typeCompletionCompartment = typeCompletionCompartment;
         this.completionSourceCompartment = completionSourceCompartment;
@@ -199,14 +271,14 @@ export default class CodeMirror extends EditorView {
     }
 
     /**
-     * Returns the currently selected text.
+     * Returns the text of the main selection range, which is what seeds the find box.
      *
-     * If there are multiple selections, all of them will be concatenated.
+     * Only the main range: with several carets, concatenating them produces a term that matches
+     * nothing, and VS Code seeds its own find from the primary selection in the same way.
      */
     getSelectedText() {
-        return this.state.selection.ranges
-            .map((range) => this.state.sliceDoc(range.from, range.to))
-            .join("");
+        const { from, to } = this.state.selection.main;
+        return this.state.sliceDoc(from, to);
     }
 
     setText(content: string) {
@@ -242,6 +314,20 @@ export default class CodeMirror extends EditorView {
                 indentUnit.of(buildIndentUnit(size, useTabs)),
                 EditorState.tabSize.of(size)
             ]) ]
+        });
+    }
+
+    /**
+     * Turns the VS Code editing gestures on or off in the open editor: multiple cursors and the
+     * modifier that adds one by clicking, the occurrence-selection keys, and the folding keys.
+     */
+    setEditingFeatures(features: EditingFeatures) {
+        this.config.multiCursor = features.multiCursor;
+        this.config.multiCursorModifier = features.multiCursorModifier;
+        this.config.selectOccurrences = features.selectOccurrences;
+        this.config.foldShortcuts = features.foldShortcuts;
+        this.dispatch({
+            effects: [ this.editingCompartment.reconfigure(buildEditingExtensions(features)) ]
         });
     }
 

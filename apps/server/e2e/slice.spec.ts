@@ -139,6 +139,24 @@ test("a nested, cloned slice shows its own subtree and offers nothing it cannot 
         .first().click({ button: "right" });
     await expect(page.locator("#context-menu-container .dropdown-item")).toHaveCount(4);
 
+    // A new tab searches the slice. Every title carries the same stamp, so one query reaches the
+    // whole fixture and only the boundary decides what comes back: the slice root and its two
+    // children, with no row for creating a note or opening a search note.
+    await app.addNewTab();
+    const searchBox = app.currentNoteSplit.locator(".note-autocomplete");
+    await searchBox.click();
+    await searchBox.pressSequentially(shape.stamp);
+
+    const suggestions = app.currentNoteSplit.locator(".note-detail-empty-results .aa-suggestion");
+    await expect(suggestions).toHaveCount(3);
+    await expect(suggestions.filter({ hasText: shape.titles.child })).toHaveCount(1);
+    for (const absent of [ shape.titles.outer, shape.titles.middle, shape.titles.elsewhere ]) {
+        await expect(suggestions.filter({ hasText: absent })).toHaveCount(0);
+    }
+
+    // The workspace switcher searches the whole vault, so the empty tab leaves it out.
+    await expect(page.locator(".workspace-notes .workspace-note")).toHaveCount(0);
+
     expect(refusals, "a slice offers nothing that is refused").toEqual([]);
 
     await context.close();
@@ -190,7 +208,7 @@ async function buildNestedSlice(page: import("@playwright/test").Page) {
         return sliceRoot;
     }, titles);
 
-    return { sliceRootNoteId, titles };
+    return { sliceRootNoteId, titles, stamp: String(stamp) };
 }
 
 /**

@@ -1,11 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { applyTheme, buildThemeStylesheetRefs, getConfiguredThemeStylesheets, getEffectiveThemeStyle, getThemeStyle, initThemeChangeNotifier } from "./theme.js";
+import { setStoredColorScheme } from "./color_scheme.js";
+import { applyTheme, applyThemeFromOptions, buildThemeStylesheetRefs, getConfiguredThemeStylesheets, getEffectiveThemeStyle, getThemeStyle, initThemeChangeNotifier } from "./theme.js";
 
 // theme.ts lazily imports the app context to emit `themeChanged`; mock it so the tests capture the emission
 // without pulling the whole app graph into happy-dom.
 const { triggerEvent } = vi.hoisted(() => ({ triggerEvent: vi.fn() }));
 vi.mock("../components/app_context.js", () => ({ default: { triggerEvent } }));
+
+// applyThemeFromOptions lazily imports the options service; stub it so the spec drives the option
+// value directly instead of standing up the whole options graph.
+const { optionValue } = vi.hoisted(() => ({ optionValue: { theme: "next" } }));
+vi.mock("./options.js", () => ({ default: { get: (name: string) => (optionValue as Record<string, string>)[name] } }));
 
 const STYLESHEETS_PATH = "/assets/stylesheets";
 
@@ -342,3 +348,43 @@ function fireLoadOnPendingThemeLinks() {
         link.dispatchEvent(new Event("load"));
     }
 }
+
+describe("applyThemeFromOptions", () => {
+    beforeEach(() => {
+        const happyDOM = (window as unknown as { happyDOM?: { settings: { disableCSSFileLoading: boolean } } }).happyDOM;
+        if (happyDOM) {
+            happyDOM.settings.disableCSSFileLoading = true;
+        }
+        win.glob = { ...(win.glob ?? {}), assetPath: "/assets" };
+        document.head.innerHTML = "";
+        localStorage.clear();
+    });
+
+    afterEach(() => {
+        document.head.innerHTML = "";
+        localStorage.clear();
+    });
+
+    it("renders the colour scheme this browser stored, within the family the option names", async () => {
+        optionValue.theme = "next";
+
+        await applyThemeFromOptions();
+        expect(themeStylesheetHrefs()).toEqual([
+            `${STYLESHEETS_PATH}/theme-next-light.css`,
+            `${STYLESHEETS_PATH}/theme-next-dark.css`
+        ]);
+
+        setStoredColorScheme("dark");
+        await applyThemeFromOptions();
+        fireLoadOnPendingThemeLinks();
+        await Promise.resolve();
+        expect(themeStylesheetHrefs()).toEqual([`${STYLESHEETS_PATH}/theme-next-dark.css`]);
+
+        // The option still names the family, so a family switch keeps this browser's scheme.
+        optionValue.theme = "auto";
+        await applyThemeFromOptions();
+        fireLoadOnPendingThemeLinks();
+        await Promise.resolve();
+        expect(themeStylesheetHrefs()).toEqual([`${STYLESHEETS_PATH}/theme-dark.css`]);
+    });
+});

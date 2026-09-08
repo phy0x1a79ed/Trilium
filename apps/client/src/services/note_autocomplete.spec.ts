@@ -299,6 +299,23 @@ describe("autocompleteSource (via dataset)", () => {
         expect(rows[rows.length - 1].action).toBe("search-notes");
     });
 
+    it("searches inside a slice but offers neither of the rows a slice cannot honour", async () => {
+        // The request goes out — the server confines it to the subtree the link opens — while the
+        // create-note and search-notes rows lead to routes a slice has no rule for.
+        const uncheckedWindow = window as unknown as { glob: { sliceRootNoteId?: string } };
+        uncheckedWindow.glob.sliceRootNoteId = "sliceRoot";
+        try {
+            server.get = vi.fn(async () => [{ noteTitle: "Inside", notePath: "sliceRoot/a" }]) as typeof server.get;
+            const { dataset } = initAndGetSource({ allowCreatingNotes: true, allowJumpToSearchNotes: true });
+            const rows = await runSource(dataset, "term");
+
+            expect(server.get).toHaveBeenCalled();
+            expect(rows.map((r) => r.noteTitle)).toEqual([ "Inside" ]);
+        } finally {
+            delete uncheckedWindow.glob.sliceRootNoteId;
+        }
+    });
+
     it("prepends an external-link suggestion when allowExternalLinks and term is a URL", async () => {
         server.get = vi.fn(async () => [{ noteTitle: "A", notePath: "root/a" }]) as typeof server.get;
         const { dataset } = initAndGetSource({ allowExternalLinks: true });

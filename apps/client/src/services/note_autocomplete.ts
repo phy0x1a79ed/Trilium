@@ -127,17 +127,16 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
     const activeNoteId = appContext.tabManager.getActiveContextNoteId();
     const length = term.trim().length;
 
-    // A slice may not search the vault, and every affordance that would offer this is hidden there.
-    if (slice.isSlice()) {
-        cb([]);
-        return;
-    }
-
     let results = await server.get<Suggestion[]>(`autocomplete?query=${encodeURIComponent(term)}&activeNoteId=${activeNoteId}&fastSearch=${fastSearch}`);
 
     options.fastSearch = true;
 
-    if (length >= 1 && options.allowCreatingNotes) {
+    // The search itself is answered for a slice, scoped server-side to the subtree the link opens.
+    // The rows appended below are not: creating a note and opening a search note both need routes a
+    // slice has no rule for, so they are left out here rather than at each caller.
+    const isSlice = slice.isSlice();
+
+    if (length >= 1 && options.allowCreatingNotes && !isSlice) {
         results = [
             {
                 action: "create-note",
@@ -148,7 +147,7 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
         ].concat(results);
     }
 
-    if (length >= 1 && options.allowJumpToSearchNotes) {
+    if (length >= 1 && options.allowJumpToSearchNotes && !isSlice) {
         results = results.concat([
             {
                 action: "search-notes",
@@ -272,7 +271,8 @@ function initNoteAutocomplete($el: JQuery<HTMLElement>, options?: Options) {
         autocompleteOptions.debug = true; // don't close on blur
     }
 
-    if (options.allowJumpToSearchNotes) {
+    // The shortcut for the "Search for …" row, so it goes wherever that row goes.
+    if (options.allowJumpToSearchNotes && !slice.isSlice()) {
         $el.on("keydown", (event) => {
             if (event.ctrlKey && event.key === "Enter") {
                 // Prevent Ctrl + Enter from triggering autoComplete.

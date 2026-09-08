@@ -1,6 +1,6 @@
 import "./code_notes.css";
 
-import CodeMirror, { ColorThemes, getThemeById, type ThemeVariant } from "@triliumnext/codemirror";
+import CodeMirror, { ColorThemes, getThemeById, toMultiCursorModifier, type EditingFeatures, type ThemeVariant } from "@triliumnext/codemirror";
 import { useEffect, useMemo, useRef } from "preact/hooks";
 
 import { t } from "../../../services/i18n";
@@ -20,12 +20,34 @@ const SAMPLE_MIME = "application/typescript";
 export default function CodeNoteSettings() {
     const [codeLineWrapEnabled, setCodeLineWrapEnabled] = useTriliumOptionBool("codeLineWrapEnabled");
     const [codeNoteTabWidth] = useTriliumOption("codeNoteTabWidth");
+    const [multiCursor, setMultiCursor] = useTriliumOptionBool("codeNoteMultiCursorEnabled");
+    const [multiCursorModifier, setMultiCursorModifier] = useTriliumOption("codeNoteMultiCursorModifier");
+    const [selectOccurrences, setSelectOccurrences] = useTriliumOptionBool("codeNoteSelectOccurrencesEnabled");
+    const [foldShortcuts, setFoldShortcuts] = useTriliumOptionBool("codeNoteFoldShortcutsEnabled");
+
+    const editingFeatures: EditingFeatures = {
+        multiCursor,
+        multiCursorModifier: toMultiCursorModifier(multiCursorModifier),
+        selectOccurrences,
+        foldShortcuts
+    };
 
     return (
         <>
             <OptionsPageHeader />
             <Editor wordWrapping={codeLineWrapEnabled} setWordWrapping={setCodeLineWrapEnabled} />
-            <Appearance wordWrapping={codeLineWrapEnabled} indentSize={parseInt(codeNoteTabWidth) || 4} />
+            <Editing
+                features={editingFeatures}
+                setMultiCursor={setMultiCursor}
+                setMultiCursorModifier={setMultiCursorModifier}
+                setSelectOccurrences={setSelectOccurrences}
+                setFoldShortcuts={setFoldShortcuts}
+            />
+            <Appearance
+                wordWrapping={codeLineWrapEnabled}
+                indentSize={parseInt(codeNoteTabWidth) || 4}
+                editingFeatures={editingFeatures}
+            />
             <CodeMimeTypes />
         </>
     );
@@ -85,9 +107,68 @@ function Editor({ wordWrapping, setWordWrapping }: EditorProps) {
     );
 }
 
+interface EditingProps {
+    features: EditingFeatures;
+    setMultiCursor: (newValue: boolean) => void;
+    setMultiCursorModifier: (newValue: string) => void;
+    setSelectOccurrences: (newValue: boolean) => void;
+    setFoldShortcuts: (newValue: boolean) => void;
+}
+
+function Editing({ features, setMultiCursor, setMultiCursorModifier, setSelectOccurrences, setFoldShortcuts }: EditingProps) {
+    const modifiers = useMemo(() => [
+        { id: "alt", name: t("code-editor-options.multi_cursor_modifier_alt") },
+        { id: "ctrl", name: t("code-editor-options.multi_cursor_modifier_ctrl") }
+    ], []);
+    const modifierName = modifiers.find(({ id }) => id === features.multiCursorModifier)?.name;
+
+    return (
+        <Card heading={t("code-editor-options.editing_title")}>
+            <OptionCardSection
+                name="multi-cursor-enabled"
+                label={t("code-editor-options.multi_cursor")}
+                description={t("code-editor-options.multi_cursor_description", { modifier: modifierName })}
+            >
+                <FormToggle currentValue={features.multiCursor} onChange={setMultiCursor} />
+            </OptionCardSection>
+
+            {features.multiCursor && (
+                <OptionCardSection
+                    name="multi-cursor-modifier"
+                    label={t("code-editor-options.multi_cursor_modifier")}
+                    description={t("code-editor-options.multi_cursor_modifier_description")}
+                >
+                    <FormSelect
+                        values={modifiers}
+                        keyProperty="id" titleProperty="name"
+                        currentValue={features.multiCursorModifier} onChange={setMultiCursorModifier}
+                    />
+                </OptionCardSection>
+            )}
+
+            <OptionCardSection
+                name="select-occurrences"
+                label={t("code-editor-options.select_occurrences")}
+                description={t("code-editor-options.select_occurrences_description")}
+            >
+                <FormToggle currentValue={features.selectOccurrences} onChange={setSelectOccurrences} />
+            </OptionCardSection>
+
+            <OptionCardSection
+                name="fold-shortcuts"
+                label={t("code-editor-options.fold_shortcuts")}
+                description={t("code-editor-options.fold_shortcuts_description")}
+            >
+                <FormToggle currentValue={features.foldShortcuts} onChange={setFoldShortcuts} />
+            </OptionCardSection>
+        </Card>
+    );
+}
+
 interface AppearanceProps {
     wordWrapping: boolean;
     indentSize: number;
+    editingFeatures: EditingFeatures;
 }
 
 function useFilteredThemes(variant?: ThemeVariant) {
@@ -101,7 +182,7 @@ function useFilteredThemes(variant?: ThemeVariant) {
     }, [variant]);
 }
 
-function Appearance({ wordWrapping, indentSize }: AppearanceProps) {
+function Appearance({ wordWrapping, indentSize, editingFeatures }: AppearanceProps) {
     const [codeNoteTheme, setCodeNoteTheme] = useTriliumOption("codeNoteTheme");
     const [matchesApp, setMatchesApp] = useTriliumOptionBool("codeNoteThemeMatchesApp");
     const [lightTheme, setLightTheme] = useTriliumOption("codeNoteThemeLight");
@@ -150,13 +231,17 @@ function Appearance({ wordWrapping, indentSize }: AppearanceProps) {
             {/* A specimen of the editor rather than a control standing beside a label, shown
                 the way a code block is shown in a note. */}
             <CardSection className="code-note-preview" filterRole="companion">
-                <CodeNotePreview wordWrapping={wordWrapping} themeName={effectiveTheme} indentSize={indentSize} />
+                <CodeNotePreview wordWrapping={wordWrapping} themeName={effectiveTheme} indentSize={indentSize} editingFeatures={editingFeatures} />
             </CardSection>
         </Card>
     );
 }
 
-function CodeNotePreview({ themeName, wordWrapping, indentSize }: { themeName: string, wordWrapping: boolean, indentSize: number }) {
+interface CodeNotePreviewProps extends AppearanceProps {
+    themeName: string;
+}
+
+function CodeNotePreview({ themeName, wordWrapping, indentSize, editingFeatures }: CodeNotePreviewProps) {
     const editorRef = useRef<CodeMirror>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -181,6 +266,10 @@ function CodeNotePreview({ themeName, wordWrapping, indentSize }: { themeName: s
     useEffect(() => {
         editorRef.current?.setLineWrapping(wordWrapping);
     }, [ wordWrapping ]);
+
+    useEffect(() => {
+        editorRef.current?.setEditingFeatures(editingFeatures);
+    }, [ editingFeatures.multiCursor, editingFeatures.multiCursorModifier, editingFeatures.selectOccurrences, editingFeatures.foldShortcuts ]);
 
     useEffect(() => {
         const editor = editorRef.current;

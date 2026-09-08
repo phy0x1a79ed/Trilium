@@ -101,7 +101,9 @@ export default class RootContainer extends FlexContainer<BasicWidget> {
         colorSchemeChangeObserver.addEventListener("change", () => this.#updateColorScheme());
         this.#updateColorScheme();
         
-        document.body.setAttribute("data-theme-id", options.get("theme"));
+        // `glob.theme`, not the option: this browser may be rendering a different colour scheme
+        // within the same theme family, and `applyTheme` keeps writing the effective value here.
+        document.body.setAttribute("data-theme-id", window.glob.theme);
     }
 
     #updateColorScheme() {

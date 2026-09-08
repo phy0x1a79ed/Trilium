@@ -13,6 +13,7 @@ import FBlob from "../../entities/fblob";
 import FNote from "../../entities/fnote";
 import attributes from "../../services/attributes";
 import { expandAncestorDetails } from "../../services/collapsible";
+import { ColorScheme, COLOR_SCHEME_CYCLE, resolveColorScheme, setStoredColorScheme } from "../../services/color_scheme";
 import froca from "../../services/froca";
 import { t } from "../../services/i18n";
 import keyboard_actions from "../../services/keyboard_actions";
@@ -23,7 +24,7 @@ import server from "../../services/server";
 import type { ShortcutHintDefinition, ShortcutHintProvider } from "../../services/shortcut_hints";
 import shortcuts, { Handler, removeIndividualBinding } from "../../services/shortcuts";
 import SpacedUpdate, { type StateCallback } from "../../services/spaced_update";
-import { getEffectiveThemeStyle } from "../../services/theme";
+import { applyThemeFromOptions, getEffectiveThemeStyle } from "../../services/theme";
 import toast, { ToastOptions } from "../../services/toast";
 import tree from "../../services/tree";
 import utils, { escapeRegExp, getErrorMessage, randomString, reloadFrontendApp } from "../../services/utils";
@@ -2005,6 +2006,56 @@ export function useColorScheme() {
     const [ themeStyle, setThemeStyle ] = useState(getEffectiveThemeStyle);
     useTriliumEvent("themeChanged", ({ themeStyle }) => setThemeStyle(themeStyle));
     return themeStyle;
+}
+
+const COLOR_SCHEME_ICONS: Record<ColorScheme, string> = {
+    system: "bx bx-brightness-half",
+    light: "bx bx-sun",
+    dark: "bx bx-moon"
+};
+
+/**
+ * What a colour-scheme switcher shows and does, so every mount of one is the same control.
+ *
+ * The scheme comes from `window.glob.theme`, the theme actually being rendered, which already
+ * carries this browser's stored choice rather than the `theme` option's. Cycling writes the store
+ * and re-applies, which repaints without a reload and re-renders every other mount through
+ * `themeChanged`. A custom theme has no light and dark variants, so the cycle refuses to move.
+ */
+export function useColorSchemeSwitcher() {
+    const [ resolved, setResolved ] = useState(() => resolveColorScheme(window.glob.theme));
+    useTriliumEvent("themeChanged", useCallback(() => setResolved(resolveColorScheme(window.glob.theme)), []));
+
+    const { scheme, isCustom } = resolved;
+
+    // Built at render time, not at module load, so the labels follow a runtime language change.
+    const schemeLabels: Record<ColorScheme, string> = {
+        system: t("theme.color_scheme_switcher_system"),
+        light: t("theme.color_scheme_switcher_light"),
+        dark: t("theme.color_scheme_switcher_dark")
+    };
+
+    const setScheme = useCallback((next: ColorScheme) => {
+        setStoredColorScheme(next);
+        void applyThemeFromOptions();
+    }, []);
+
+    return {
+        scheme,
+        isCustom,
+        setScheme,
+        icon: COLOR_SCHEME_ICONS[scheme],
+        tooltip: isCustom
+            ? t("theme.color_scheme_switcher_unsupported")
+            : `<span class="mode">${schemeLabels[scheme]}</span><span class="hint">${t("theme.color_scheme_switcher_hint")}</span>`,
+        cycle: useCallback(() => {
+            if (isCustom) {
+                return;
+            }
+            const index = COLOR_SCHEME_CYCLE.indexOf(scheme);
+            setScheme(COLOR_SCHEME_CYCLE[(index + 1) % COLOR_SCHEME_CYCLE.length]);
+        }, [ scheme, isCustom, setScheme ])
+    };
 }
 
 /**

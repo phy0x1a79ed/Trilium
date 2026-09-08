@@ -1891,7 +1891,18 @@
   "code-editor-options": {
     "title": "Editor",
     "tab_width": "Tab width",
-    "tab_width_unit": "spaces"
+    "tab_width_unit": "spaces",
+    "editing_title": "Editing",
+    "multi_cursor": "Multiple cursors",
+    "multi_cursor_description": "{{modifier}}+click adds or removes a cursor, Ctrl+Alt+Up and Ctrl+Alt+Down add one on the line above or below, and Shift+{{modifier}}+drag selects a column. Escape returns to a single cursor.",
+    "multi_cursor_modifier": "Add-cursor modifier",
+    "multi_cursor_modifier_description": "The key held while clicking. On macOS, Alt is Option and Ctrl is Command.",
+    "multi_cursor_modifier_alt": "Alt",
+    "multi_cursor_modifier_ctrl": "Ctrl",
+    "select_occurrences": "Select next occurrence",
+    "select_occurrences_description": "Ctrl+D extends the selection to the next occurrence of the selected text, and Ctrl+Shift+L selects every occurrence at once.",
+    "fold_shortcuts": "Code folding shortcuts",
+    "fold_shortcuts_description": "Ctrl+Shift+[ folds the block at the cursor and Ctrl+Shift+] unfolds it; Ctrl+Alt+[ and Ctrl+Alt+] fold and unfold the whole note."
   },
   "code_mime_types": {
     "title": "Available MIME types in the dropdown",

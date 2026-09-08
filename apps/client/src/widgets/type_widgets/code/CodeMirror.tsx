@@ -58,6 +58,16 @@ export default function CodeMirror({ className, content, mime, editorRef: extern
     // React to line wrapping.
     useEffect(() => codeEditorRef.current?.setLineWrapping(!!lineWrapping), [ lineWrapping ]);
 
+    // React to the editing-gesture options (multiple cursors, occurrence selection, folding keys).
+    useEffect(() => {
+        codeEditorRef.current?.setEditingFeatures({
+            multiCursor: extraOpts.multiCursor ?? true,
+            multiCursorModifier: extraOpts.multiCursorModifier ?? "alt",
+            selectOccurrences: extraOpts.selectOccurrences ?? true,
+            foldShortcuts: extraOpts.foldShortcuts ?? true
+        });
+    }, [ extraOpts.multiCursor, extraOpts.multiCursorModifier, extraOpts.selectOccurrences, extraOpts.foldShortcuts ]);
+
     // React to indent size / style changes.
     useEffect(() => {
         if (extraOpts.indentSize != null || extraOpts.useTabs != null) {

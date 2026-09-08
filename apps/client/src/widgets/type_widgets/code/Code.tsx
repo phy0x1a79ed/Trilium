@@ -1,6 +1,6 @@
 import "./code.css";
 
-import { default as VanillaCodeMirror, getThemeById } from "@triliumnext/codemirror";
+import { default as VanillaCodeMirror, getThemeById, toMultiCursorModifier } from "@triliumnext/codemirror";
 import { NoteType } from "@triliumnext/commons";
 import { Ref } from "preact";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
@@ -180,6 +180,10 @@ export function CodeEditor({ parentComponent, ntxId, containerRef: externalConta
     const [ codeNoteTheme ] = useTriliumOption("codeNoteTheme");
     const [ codeNoteTabWidth ] = useTriliumOption("codeNoteTabWidth");
     const [ codeNoteIndentWithTabs ] = useTriliumOptionBool("codeNoteIndentWithTabs");
+    const [ multiCursorEnabled ] = useTriliumOptionBool("codeNoteMultiCursorEnabled");
+    const [ storedMultiCursorModifier ] = useTriliumOption("codeNoteMultiCursorModifier");
+    const [ selectOccurrencesEnabled ] = useTriliumOptionBool("codeNoteSelectOccurrencesEnabled");
+    const [ foldShortcutsEnabled ] = useTriliumOptionBool("codeNoteFoldShortcutsEnabled");
     const [ matchesApp ] = useTriliumOptionBool("codeNoteThemeMatchesApp");
     const [ lightTheme ] = useTriliumOption("codeNoteThemeLight");
     const [ darkTheme ] = useTriliumOption("codeNoteThemeDark");
@@ -188,6 +192,8 @@ export function CodeEditor({ parentComponent, ntxId, containerRef: externalConta
     const effectiveTheme = matchesApp
         ? (colorScheme === "dark" ? darkTheme : lightTheme)
         : codeNoteTheme;
+
+    const multiCursorModifier = toMultiCursorModifier(storedMultiCursorModifier);
 
     // React to background color.
     const [ backgroundColor, setBackgroundColor ] = useState<string>();
@@ -253,6 +259,10 @@ export function CodeEditor({ parentComponent, ntxId, containerRef: externalConta
         lineWrapping={lineWrapping ?? codeLineWrapEnabled}
         indentSize={editorProps.indentSize ?? (parseInt(codeNoteTabWidth) || 4)}
         useTabs={editorProps.useTabs ?? codeNoteIndentWithTabs}
+        multiCursor={editorProps.multiCursor ?? multiCursorEnabled}
+        multiCursorModifier={editorProps.multiCursorModifier ?? multiCursorModifier}
+        selectOccurrences={editorProps.selectOccurrences ?? selectOccurrencesEnabled}
+        foldShortcuts={editorProps.foldShortcuts ?? foldShortcutsEnabled}
         onInitialized={() => {
             if (containerRef.current) {
                 if (typeof externalContainerRef === "function") externalContainerRef(containerRef.current);
