@@ -1,0 +1,6 @@
+outs:
+- md5: 9af397ccdb8d9f8f098ee4ec988d3421.dir
+  size: 97096792
+  nfiles: 139
+  hash: md5
+  path: zotero

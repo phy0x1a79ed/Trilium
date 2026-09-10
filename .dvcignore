@@ -1,0 +1,14 @@
+# Everything here is Trilium's source except data/, and DVC walks whatever it
+# is not told to skip. node_modules alone is ~100k files, so an unfiltered
+# `dvc status` costs minutes on a worktree that pins two directories.
+#
+# live/ is listed for a second reason: the database and its write-ahead log are
+# one unit, so a pin taken while the server runs records a state that never
+# existed. Nothing must make it reachable by accident.
+/apps/
+/docs/
+/live/
+/node_modules/
+/packages/
+/patches/
+/scripts/
