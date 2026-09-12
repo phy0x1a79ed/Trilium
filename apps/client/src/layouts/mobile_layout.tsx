@@ -11,6 +11,7 @@ import ScrollingContainer from "../widgets/containers/scrolling_container.js";
 import SplitNoteContainer from "../widgets/containers/split_note_container.js";
 import FindWidget from "../widgets/find.js";
 import LauncherContainer from "../widgets/launch_bar/LauncherContainer.jsx";
+import SliceLauncherBar from "../widgets/launch_bar/SliceLauncherBar.jsx";
 import InlineTitle from "../widgets/layout/InlineTitle.jsx";
 import NoteBadges from "../widgets/layout/NoteBadges.jsx";
 import NoteTitleActions from "../widgets/layout/NoteTitleActions.jsx";
@@ -31,10 +32,9 @@ import { applyModals } from "./layout_commons.js";
 
 export default class MobileLayout {
     getRootWidget(appContext: typeof AppContext) {
-        // The launcher pane and quick search would only offer a visitor commands the slice mask
-        // refuses (jump to note, global search, settings, launcher config, new note): a slice
-        // visitor never sees them, on top of the mask that would 403 the request underneath.
-        const showLauncherPane = !slice.isSlice();
+        // Quick search and the global menu stay out of a slice: the menu reaches settings, sync and
+        // the protected session, and what a slice offers is the fixed bar `SliceLauncherBar` holds.
+        const inSlice = slice.isSlice();
 
         const rootContainer = new RootContainer(true)
             .setParent(appContext)
@@ -56,7 +56,7 @@ export default class MobileLayout {
                                 new FlexContainer("column")
                                     .filling()
                                     .id("mobile-sidebar-wrapper")
-                                    .optChild(showLauncherPane, new QuickSearchWidget())
+                                    .optChild(!inSlice, new QuickSearchWidget())
                                     .child(<MobileNoteNavigator />)
                             )
                     )
@@ -95,15 +95,16 @@ export default class MobileLayout {
                             )
                     )
             )
-            .optChild(showLauncherPane,
+            .child(
                 new FlexContainer("column")
                     .contentSized()
                     .id("mobile-bottom-bar")
                     .child(new FlexContainer("row")
                         .class("horizontal")
                         .css("height", "53px")
-                        .child(<LauncherContainer isHorizontalLayout />)
-                        .child(<GlobalMenuWidget isHorizontalLayout />)
+                        .optChild(inSlice, <SliceLauncherBar isHorizontalLayout />)
+                        .optChild(!inSlice, <LauncherContainer isHorizontalLayout />)
+                        .optChild(!inSlice, <GlobalMenuWidget isHorizontalLayout />)
                         .id("launcher-pane"))
             )
             .child(<CloseZenModeButton />);

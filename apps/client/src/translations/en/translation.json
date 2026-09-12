@@ -130,6 +130,7 @@
     "erase_notes_warning": "Erase notes permanently (can't be undone), including all clones. This will force application reload.",
     "notes_to_be_deleted": "Notes to be deleted ({{notesCount}})",
     "no_note_to_delete": "No note will be deleted (only clones).",
+    "slice_confirmation": "Delete the selected notes, and everything under them, from this shared view?",
     "broken_relations_to_be_deleted": "Broken relations ({{relationCount}})",
     "table_note_with_relation": "Note with relation",
     "table_relation": "Relation",
@@ -4075,5 +4076,13 @@
     "can_edit": "Can edit",
     "read_only": "Read-only",
     "expires_on": "Expires {{date}}"
+  },
+  "slice_launcher": {
+    "new_note": "New note",
+    "search": "Search",
+    "jump_to_note": "Jump to note",
+    "note_map": "Note map",
+    "recent_changes": "Recent changes",
+    "search_note_title": "Search: {{searchString}}"
   }
 }

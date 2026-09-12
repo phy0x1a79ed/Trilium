@@ -7,6 +7,7 @@ import commandRegistry from "../../services/command_registry";
 import { t } from "../../services/i18n";
 import note_autocomplete, { Suggestion } from "../../services/note_autocomplete";
 import shortcutService from "../../services/shortcuts";
+import slice from "../../services/slice";
 import Button from "../react/Button";
 import { useTriliumEvent } from "../react/hooks";
 import Modal from "../react/Modal";
@@ -129,10 +130,11 @@ export default function JumpToNoteDialogComponent() {
                 container={containerRef}
                 text={initialText}
                 opts={{
-                    allowCreatingNotes: true,
+                    allowCreatingNotes: !slice.isReadOnly(),
                     hideGoToSelectedNoteButton: true,
-                    allowJumpToSearchNotes: true,
-                    isCommandPalette: true
+                    allowJumpToSearchNotes: !slice.isReadOnly(),
+                    // The palette names commands across the whole app, most of which a slice cannot run.
+                    isCommandPalette: !slice.isSlice()
                 }}
                 onTextChange={(text) => {
                     actualText.current = text;
@@ -142,7 +144,7 @@ export default function JumpToNoteDialogComponent() {
             />}
             onShown={onShown}
             onHidden={() => setShown(false)}
-            footer={!isCommandMode && <Button
+            footer={!isCommandMode && !slice.isReadOnly() && <Button
                 className="show-in-full-text-button"
                 text={t("jump_to_note.search_button")}
                 keyboardShortcut="Ctrl+Enter"

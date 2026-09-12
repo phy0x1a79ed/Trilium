@@ -9,6 +9,7 @@ import appContext from "../../components/app_context.js";
 import { DEFINITION_PREFIXES, isDefinitionName } from "../../entities/fattribute.js";
 import contextMenu, { MenuItem } from "../../menus/context_menu.js";
 import type { Attribute } from "../../services/attribute_parser.js";
+import { queryAttributeNames, queryAttributeValues } from "../../services/attribute_autocomplete.js";
 import { getBuiltinLabelSelectOptions, getBuiltinLabelValueType, isBuiltinAttribute } from "../../services/attributes.js";
 import { isExperimentalFeatureEnabled } from "../../services/experimental_features.js";
 import { focusSavedElement, saveFocusedElement } from "../../services/focus.js";
@@ -403,7 +404,7 @@ export function AttributeForm({ opts, attrType: initialAttrType, currentNoteId, 
         if (knownValues.current?.name !== name) {
             knownValues.current = {
                 name,
-                values: await server.get<string[]>(`attribute-values/${encodeURIComponent(name)}`)
+                values: await queryAttributeValues(name)
             };
         }
 
@@ -852,7 +853,7 @@ export const DEFINITION_TYPES: { value: string; title: string; icon: string; sta
 ];
 
 export function fetchAttributeNames(type: "label" | "relation", query: string) {
-    return server.get<string[]>(`attribute-names/?type=${type}&query=${encodeURIComponent(query)}`);
+    return queryAttributeNames(type, query);
 }
 
 /**

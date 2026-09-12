@@ -9,6 +9,7 @@ import { List, type RowComponentProps } from "react-window";
 import froca from "../../services/froca.js";
 import { t } from "../../services/i18n.js";
 import server from "../../services/server.js";
+import slice from "../../services/slice.js";
 import Button from "../react/Button.jsx";
 import { Card, CardSection } from "../react/Card.js";
 import FormToggle from "../react/FormToggle.js";
@@ -48,6 +49,9 @@ export default function DeleteNotesDialog() {
     const [ shown, setShown ] = useState(false);
     const [ cloneInfo, setCloneInfo ] = useState<CloneInfo>({ totalCloneCount: 0 });
     const okButtonRef = useRef<HTMLButtonElement>(null);
+    // The preview reports relations broken across the whole vault and erasing acts on every clone
+    // wherever it lives, so `slice_mask.ts` refuses both. A slice confirms the branch delete instead.
+    const showsPreview = !slice.isSlice();
 
     useTriliumEvent("showDeleteNotesDialog", (opts) => {
         setOpts(opts);
@@ -86,7 +90,7 @@ export default function DeleteNotesDialog() {
 
     useEffect(() => {
         const { branchIdsToDelete, forceDeleteAllClones } = opts;
-        if (!branchIdsToDelete || branchIdsToDelete.length === 0) {
+        if (!showsPreview || !branchIdsToDelete || branchIdsToDelete.length === 0) {
             return;
         }
 
@@ -121,29 +125,37 @@ export default function DeleteNotesDialog() {
             </>}
             show={shown}
         >
-            <Card>
-                <CardSection>
-                    <DeleteAllClonesOption
-                        cloneInfo={cloneInfo}
-                        deleteAllClones={deleteAllClones}
-                        setDeleteAllClones={setDeleteAllClones}
-                    />
-                    <OptionsRow
-                        name="erase-notes"
-                        label={t("delete_notes.erase_notes_label")}
-                        description={t("delete_notes.erase_notes_description")}
-                    >
-                        <FormToggle
-                            disabled={opts.forceDeleteAllClones}
-                            currentValue={eraseNotes}
-                            onChange={setEraseNotes}
-                        />
-                    </OptionsRow>
-                </CardSection>
-            </Card>
+            {showsPreview ? (
+                <>
+                    <Card>
+                        <CardSection>
+                            <DeleteAllClonesOption
+                                cloneInfo={cloneInfo}
+                                deleteAllClones={deleteAllClones}
+                                setDeleteAllClones={setDeleteAllClones}
+                            />
+                            <OptionsRow
+                                name="erase-notes"
+                                label={t("delete_notes.erase_notes_label")}
+                                description={t("delete_notes.erase_notes_description")}
+                            >
+                                <FormToggle
+                                    disabled={opts.forceDeleteAllClones}
+                                    currentValue={eraseNotes}
+                                    onChange={setEraseNotes}
+                                />
+                            </OptionsRow>
+                        </CardSection>
+                    </Card>
 
-            <BrokenRelations brokenRelations={brokenRelations} />
-            <DeletedNotes noteIdsToBeDeleted={noteIdsToBeDeleted} />
+                    <BrokenRelations brokenRelations={brokenRelations} />
+                    <DeletedNotes noteIdsToBeDeleted={noteIdsToBeDeleted} />
+                </>
+            ) : (
+                <Card>
+                    <CardSection>{t("delete_notes.slice_confirmation")}</CardSection>
+                </Card>
+            )}
         </Modal>
     );
 }

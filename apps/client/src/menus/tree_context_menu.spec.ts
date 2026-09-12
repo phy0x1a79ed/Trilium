@@ -18,6 +18,7 @@ vi.mock("../services/i18n", () => ({
 describe("tree context menu inside a slice", () => {
     beforeEach(() => {
         glob.sliceRootNoteId = "sliceRoot1";
+        glob.sliceCanWrite = false;
     });
 
     it("offers exactly the four entries that reach nothing refused", async () => {
@@ -50,5 +51,62 @@ describe("tree context menu inside a slice", () => {
 
         const enabled = items.map((item) => (item as MenuCommandItem<TreeCommandNames>).enabled);
         expect(enabled).toEqual([ false, false, false, true ]);
+    });
+
+    it("offers the tree edits a writable link admits, and nothing that leaves the slice", async () => {
+        glob.sliceCanWrite = true;
+
+        const items = await buildTreeContextMenuItems({
+            note: { noteId: "inside", type: "text", isArchived: false } as FNote,
+            branch: { branchId: "sliceRoot1_inside", parentNoteId: "sliceRoot1" } as FBranch,
+            selectedOrActiveNoteIds: [ "inside" ],
+            selectedOrActiveBranchIds: [ "sliceRoot1_inside" ],
+            notePath: "root/sliceRoot1/inside",
+            component: {} as never
+        });
+
+        expect(items.map((item) => "title" in item ? item.title : "separator")).toEqual([
+            "tree-context-menu.open-in-a-new-tab",
+            "tree-context-menu.open-in-a-new-split",
+            "tree-context-menu.open-in-popup",
+            "tree-context-menu.copy-note-path-to-clipboard",
+            "separator",
+            "tree-context-menu.insert-note-after",
+            "tree-context-menu.insert-child-note",
+            "separator",
+            "tree-context-menu.cut",
+            "tree-context-menu.copy-clone",
+            "tree-context-menu.paste-into",
+            "tree-context-menu.paste-after",
+            "tree-context-menu.move-to",
+            "tree-context-menu.clone-to",
+            "tree-context-menu.duplicate",
+            "separator",
+            "tree-context-menu.archive",
+            "tree-context-menu.delete",
+            "separator",
+            "tree-context-menu.advanced"
+        ]);
+    });
+
+    it("disables what would name a note outside the slice when the target is the slice root", async () => {
+        glob.sliceCanWrite = true;
+
+        const items = await buildTreeContextMenuItems({
+            note: { noteId: "sliceRoot1", type: "text", isArchived: false } as FNote,
+            branch: { branchId: "root_sliceRoot1", parentNoteId: "root" } as FBranch,
+            selectedOrActiveNoteIds: [ "sliceRoot1" ],
+            selectedOrActiveBranchIds: [ "root_sliceRoot1" ],
+            notePath: "root/sliceRoot1",
+            component: {} as never
+        });
+
+        const enabledByCommand = new Map(items
+            .filter((item): item is MenuCommandItem<TreeCommandNames> => "command" in item && !!item.command)
+            .map((item) => [ item.command, item.enabled ]));
+        for (const command of [ "insertNoteAfter", "cutNotesToClipboard", "moveNotesTo", "cloneNotesTo", "duplicateSubtree", "deleteNotes" ]) {
+            expect(enabledByCommand.get(command as TreeCommandNames)).toBe(false);
+        }
+        expect(enabledByCommand.get("insertChildNote")).toBe(true);
     });
 });

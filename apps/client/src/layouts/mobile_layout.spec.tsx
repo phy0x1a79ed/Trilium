@@ -24,6 +24,18 @@ function containsQuickSearch(root: TypedComponent<any>): boolean {
     return root.children.some((child) => containsQuickSearch(child));
 }
 
+/**
+ * Whether the tree holds a React widget rendering the named component. The layouts mount components
+ * through JSX, which `ReactWrappedWidget` keeps as a VNode rather than as a widget subclass.
+ */
+function containsReactWidget(root: TypedComponent<any>, componentName: string): boolean {
+    const type = (root as any).el?.type;
+    if (typeof type === "function" && type.name === componentName) {
+        return true;
+    }
+    return root.children.some((child) => containsReactWidget(child, componentName));
+}
+
 function buildRootWidget() {
     const layout = new MobileLayout();
     return layout.getRootWidget({} as typeof AppContext);
@@ -37,12 +49,14 @@ describe("MobileLayout", () => {
         expect(containsQuickSearch(root)).toBe(true);
     });
 
-    it("hides the launcher pane (launchbar, global search, jump-to-note, settings, new note) and quick search inside a slice", () => {
+    it("gives a slice its own launcher bar, and leaves out the owner's launchers and quick search", () => {
         (globalThis as any).glob.sliceRootNoteId = "slice-root-note";
 
         const root = buildRootWidget();
 
-        expect(containsWidgetId(root, "launcher-pane")).toBe(false);
+        expect(containsWidgetId(root, "launcher-pane")).toBe(true);
         expect(containsQuickSearch(root)).toBe(false);
+        expect(containsReactWidget(root, "SliceLauncherBar")).toBe(true);
+        expect(containsReactWidget(root, "LauncherContainer")).toBe(false);
     });
 });

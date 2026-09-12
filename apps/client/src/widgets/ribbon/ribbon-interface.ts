@@ -32,11 +32,11 @@ export interface TabConfiguration {
      */
     stayInDom?: boolean;
     /**
-     * Whether a public slice shows this tab. Defaults to false: a slice writes nothing but a note
-     * body and reads only the routes `slice_mask.ts` names, so a tab is opted in one at a time
-     * rather than opted out.
+     * Which public slices show this tab: `true` for any of them, `"writable"` for a link that may
+     * write. Absent means no slice shows it, so a tab is opted in one at a time rather than opted
+     * out of the routes `slice_mask.ts` refuses.
      */
-    availableInSlice?: boolean;
+    availableInSlice?: true | "writable";
 }
 
 export async function shouldShowTab(showConfig: TabConfiguration["show"], context: TitleContext) {

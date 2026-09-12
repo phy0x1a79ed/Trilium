@@ -64,7 +64,8 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         content: FilePropertiesTab,
         show: ({ note }) => note?.type === "file",
         toggleCommand: "toggleRibbonTabFileProperties",
-        activate: ({ note }) => note?.mime !== "application/pdf"
+        activate: ({ note }) => note?.mime !== "application/pdf",
+        availableInSlice: "writable"
     },
     {
         title: t("image_properties.title"),
@@ -73,13 +74,15 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         show: ({ note }) => note?.type === "image",
         toggleCommand: "toggleRibbonTabImageProperties",
         activate: true,
+        availableInSlice: "writable",
     },
     {
         title: t("basic_properties.basic_properties"),
         icon: "bx bx-slider",
         content: BasicPropertiesTab,
         show: ({note}) => !note?.isLaunchBarConfig(),
-        toggleCommand: "toggleRibbonTabBasicProperties"
+        toggleCommand: "toggleRibbonTabBasicProperties",
+        availableInSlice: "writable"
     },
     {
         title: t("owned_attribute_list.owned_attributes"),
@@ -87,7 +90,8 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         content: OwnedAttributesTab,
         show: ({note}) => !note?.isLaunchBarConfig(),
         toggleCommand: "toggleRibbonTabOwnedAttributes",
-        stayInDom: true
+        stayInDom: true,
+        availableInSlice: "writable"
     },
     {
         title: t("inherited_attribute_list.title"),
@@ -101,7 +105,8 @@ export const RIBBON_TAB_DEFINITIONS: TabConfiguration[] = [
         icon: "bx bx-collection",
         content: NotePathsTab,
         show: true,
-        toggleCommand: "toggleRibbonTabNotePaths"
+        toggleCommand: "toggleRibbonTabNotePaths",
+        availableInSlice: "writable"
     },
     {
         title: t("note_map.title"),

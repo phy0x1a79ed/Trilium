@@ -69,6 +69,26 @@ export const DESKTOP_FLOATING_BUTTONS: FloatingButtonsList = [
 ];
 
 /**
+ * The floating buttons a public slice shows, composed here rather than filtered from the list above,
+ * so a button added upstream is absent until somebody adds it. The rest reach a route
+ * `slice_mask.ts` refuses, save an option, or run a script.
+ *
+ * `ToggleReadOnlyButton` and `DisplayModeSwitcher` write a label on the note, so they come only with
+ * a link that permits writing.
+ */
+export function sliceFloatingButtons(canWrite: boolean): FloatingButtonsList {
+    const readingButtons = [
+        EditButton,
+        ShowTocWidgetButton,
+        ShowHighlightsListWidgetButton,
+        CopyImageReferenceButton,
+        ExportImageButtons,
+        ExportSpreadsheetButton
+    ];
+    return canWrite ? [ ToggleReadOnlyButton, DisplayModeSwitcher, ...readingButtons ] : readingButtons;
+}
+
+/**
  * Floating buttons that should be hidden in popup editor (Quick edit).
  */
 export const POPUP_HIDDEN_FLOATING_BUTTONS: FloatingButtonsList = [

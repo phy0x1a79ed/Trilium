@@ -1,5 +1,6 @@
 import type { AttributeType } from "../entities/fattribute.js";
 import server from "./server.js";
+import slice from "./slice.js";
 
 interface InitOptions {
     $el: JQuery<HTMLElement>;
@@ -31,7 +32,7 @@ function initAttributeNameAutocomplete({ $el, attributeType, open }: InitOptions
                     source: async (term, cb) => {
                         const type = typeof attributeType === "function" ? attributeType() : attributeType;
 
-                        const names = await server.get<string[]>(`attribute-names/?type=${type}&query=${encodeURIComponent(term)}`);
+                        const names = await queryAttributeNames(type, term);
                         const result = names.map((name) => ({ name }));
 
                         cb(result);
@@ -68,7 +69,7 @@ async function initLabelValueAutocomplete({ $el, open, nameCallback }: InitOptio
         return;
     }
 
-    const attributeValues = (await server.get<string[]>(`attribute-values/${encodeURIComponent(attributeName)}`)).map((attribute) => ({ value: attribute }));
+    const attributeValues = (await queryAttributeValues(attributeName)).map((attribute) => ({ value: attribute }));
 
     if (attributeValues.length === 0) {
         return;
@@ -106,6 +107,26 @@ async function initLabelValueAutocomplete({ $el, open, nameCallback }: InitOptio
     if (open) {
         $el.autocomplete("open");
     }
+}
+
+/**
+ * The attribute names of `type` matching `query`, and the values already given to `attributeName`.
+ *
+ * Both answer from the whole vault's vocabulary, which is why `slice_mask.ts` refuses the routes
+ * behind them. A slice suggests nothing and the field still accepts whatever is typed.
+ */
+export function queryAttributeNames(type: AttributeType | undefined, query: string): Promise<string[]> {
+    if (slice.isSlice()) {
+        return Promise.resolve([]);
+    }
+    return server.get<string[]>(`attribute-names/?type=${type}&query=${encodeURIComponent(query)}`);
+}
+
+export function queryAttributeValues(attributeName: string): Promise<string[]> {
+    if (slice.isSlice()) {
+        return Promise.resolve([]);
+    }
+    return server.get<string[]>(`attribute-values/${encodeURIComponent(attributeName)}`);
 }
 
 export default {
