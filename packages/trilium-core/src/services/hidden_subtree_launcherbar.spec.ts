@@ -59,6 +59,7 @@ describe("buildLaunchBarConfig", () => {
             "_lbSearch",
             "_lbJumpTo",
             "_lbNoteMap",
+            "_lbSharedSlices",
             "_lbLlmChat",
             "_lbCalendar",
             "_lbRecentChanges",
@@ -125,6 +126,7 @@ describe("buildLaunchBarConfig", () => {
 
         expect(byId(config.desktopAvailableLaunchers, "_lbBackendLog").targetNoteId).toBe("_backendLog");
         expect(byId(config.desktopVisibleLaunchers, "_lbNoteMap").targetNoteId).toBe("_globalNoteMap");
+        expect(byId(config.desktopVisibleLaunchers, "_lbSharedSlices").targetNoteId).toBe("_sharedSlices");
     });
 
     it("configures both spacers with distinct sizing", () => {

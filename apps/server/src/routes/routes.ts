@@ -142,7 +142,8 @@ function register(app: express.Application) {
     apiRoute(DEL, "/api/etapi-tokens/:etapiTokenId", etapiTokensApiRoutes.deleteToken);
 
     // Server-only: these reach the awm gateway over loopback, which the standalone build has no
-    // transport for. A slice visitor is refused all three -- `sliceMask` names none of them.
+    // transport for. A slice visitor is refused all four -- `sliceMask` names none of them.
+    asyncApiRoute(GET, "/api/slices", slicesApiRoutes.getAllSlices);
     asyncApiRoute(GET, "/api/slices/:noteId", slicesApiRoutes.getSlices);
     asyncApiRoute(PST, "/api/slices", slicesApiRoutes.createSlice);
     asyncApiRoute(DEL, "/api/slices/:token", slicesApiRoutes.revokeSlice);

@@ -4062,8 +4062,8 @@
     "expiry_day": "In a day",
     "expiry_week": "In a week",
     "expiry_month": "In a month",
-    "allow_editing": "Let the visitor edit text notes",
-    "allow_editing_hint": "Only the body of a text note can be changed. Titles, attributes and the tree itself stay read-only, and every change is kept in the note's history.",
+    "allow_editing": "Let the visitor change this subtree",
+    "allow_editing_hint": "The visitor can write, rename, move, annotate and delete notes inside this note and its descendants. Nothing outside it can be reached, and every change is kept in the note's history.",
     "create": "Create link",
     "existing": "Links already shared",
     "loading": "Loading…",
@@ -4075,7 +4075,20 @@
     "open_to_anyone": "Anyone with the link",
     "can_edit": "Can edit",
     "read_only": "Read-only",
-    "expires_on": "Expires {{date}}"
+    "expires_on": "Expires {{date}}",
+    "expired_on": "Expired {{date}}",
+    "created_on": "Shared {{date}}",
+    "revoked_on": "Revoked {{date}}"
+  },
+  "shared_slices": {
+    "explanation": "Every link this vault has handed out, grouped by the note it opens.",
+    "show_inactive": "Show revoked and expired links",
+    "refresh": "Read the list again",
+    "loading": "Loading…",
+    "none": "No links have been handed out.",
+    "failed": "The links could not be read.",
+    "unavailable": "This Trilium cannot share slice links. It needs an awm gateway in front of it.",
+    "open_note": "Open the note"
   },
   "slice_launcher": {
     "new_note": "New note",

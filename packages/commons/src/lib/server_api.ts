@@ -1106,6 +1106,12 @@ export interface SliceInfo {
     /** The credential in the link's path. Whoever holds it holds the slice. */
     token: string;
     noteId: string;
+    /**
+     * The title of `noteId`, read from becca when the route answers, or `null` when becca no longer
+     * holds the note. The client lists links across the whole vault and holds froca notes for only
+     * the subtree on screen, so it cannot resolve the title itself.
+     */
+    title: string | null;
     /** The visitor the link is bound to, or `null` for an open link anyone can follow. */
     user: string | null;
     /** Whether the link may edit note bodies. Nothing else is writable through a slice. */

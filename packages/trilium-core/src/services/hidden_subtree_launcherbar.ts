@@ -132,6 +132,13 @@ export default function buildLaunchBarConfig() {
             icon: "bx bxs-network-chart"
         },
         {
+            id: "_lbSharedSlices",
+            title: t("hidden-subtree.shared-slices-title"),
+            type: "launcher",
+            targetNoteId: "_sharedSlices",
+            icon: "bx bx-link"
+        },
+        {
             id: "_lbLlmChat",
             title: t("hidden-subtree.llm-chat-title"),
             type: "launcher",

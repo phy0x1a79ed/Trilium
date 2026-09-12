@@ -21,12 +21,13 @@ import LlmSettings from "./options/llm";
 import "./ContentWidget.css";
 import { t } from "../../services/i18n";
 import BackendLog from "./code/BackendLog";
+import SharedSlices from "./SharedSlices";
 import SpaceUsage from "./space_usage";
 
 export type OptionPages = "_optionsAppearance" | "_optionsShortcuts" | "_optionsTextNotes" | "_optionsCodeNotes" | "_optionsContentManager" | "_optionsMedia" | "_optionsSpellcheck" | "_optionsPassword" | "_optionsEtapi" | "_optionsBackup" | "_optionsDatabase" | "_optionsSync" | "_optionsDesktop" | "_optionsOther" | "_optionsLocalization" | "_optionsSecurity" | "_optionsAdvanced" | "_optionsLlm";
 
 /** The page behind each of these notes. Exported for the options search, which renders them all. */
-export const CONTENT_WIDGETS: Record<OptionPages | "_backendLog" | "_spaceUsage", (props: TypeWidgetProps) => JSX.Element> = {
+export const CONTENT_WIDGETS: Record<OptionPages | "_backendLog" | "_spaceUsage" | "_sharedSlices", (props: TypeWidgetProps) => JSX.Element> = {
     _optionsAppearance: AppearanceSettings,
     _optionsShortcuts: ShortcutSettings,
     _optionsTextNotes: TextNoteSettings,
@@ -46,7 +47,8 @@ export const CONTENT_WIDGETS: Record<OptionPages | "_backendLog" | "_spaceUsage"
     _optionsAdvanced: AdvancedSettings,
     _optionsLlm: LlmSettings,
     _backendLog: BackendLog,
-    _spaceUsage: SpaceUsage
+    _spaceUsage: SpaceUsage,
+    _sharedSlices: SharedSlices
 }
 
 /**

@@ -1,3 +1,5 @@
+import becca from "@triliumnext/core/src/becca/becca.js";
+import { buildNote } from "@triliumnext/core/src/test/becca_easy_mocking.js";
 import type { Request } from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +23,7 @@ describe("Slices API", () => {
     afterEach(() => {
         vi.unstubAllEnvs();
         vi.unstubAllGlobals();
+        becca.reset();
     });
 
     it("mints a link through the gateway and hands back what awm recorded", async () => {
@@ -31,7 +34,7 @@ describe("Slices API", () => {
         }));
 
         expect(slice).toEqual({
-            token: "tok123", noteId: "note1", user: "steven", write: true,
+            token: "tok123", noteId: "note1", title: null, user: "steven", write: true,
             createdAt: 1700000000, expiresAt: null, revokedAt: null, active: true,
             url: "https://example.invalid/slice/tok123/#root/note1"
         });
@@ -55,6 +58,19 @@ describe("Slices API", () => {
         expect(slices).toHaveLength(1);
         expect(slices[0].noteId).toBe("note1");
         expect(slices[0].createdAt).toBe(1700000000);
+    });
+
+    it("lists every slice on the vault when no note is named, and titles each row from becca", async () => {
+        buildNote({ id: "note1", title: "Field notes" });
+        const fetchMock = stubAwm({ result: { slices: [ AWM_ROW, { ...AWM_ROW, token: "tok456", note_id: "gone" } ] } });
+
+        const { slices } = await slicesRoute.getAllSlices();
+
+        expect(slices.map((slice) => slice.title)).toEqual([ "Field notes", null ]);
+        // An absent note id means every slice, so the args carry nothing at all.
+        expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({
+            name: "trilium_slice_list", args: {}
+        });
     });
 
     it("revokes by token and asks for nothing else", async () => {
@@ -82,6 +98,7 @@ describe("Slices API", () => {
 
         for (const call of [
             () => slicesRoute.getSlices(req({ params: { noteId: "note1" } })),
+            () => slicesRoute.getAllSlices(),
             () => slicesRoute.createSlice(req({ body: { noteId: "note1" } })),
             () => slicesRoute.revokeSlice(req({ params: { token: "tok123" } }))
         ]) {

@@ -1,0 +1,21 @@
+.shared-slices {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 1em;
+
+    .shared-slices-explanation {
+        color: var(--muted-text-color);
+    }
+
+    .shared-slices-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5em;
+        margin-bottom: 1em;
+    }
+
+    .tn-card {
+        margin-bottom: 1em;
+    }
+}
