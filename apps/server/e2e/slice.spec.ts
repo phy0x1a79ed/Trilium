@@ -285,6 +285,23 @@ test("a slice offers nothing refused under the new layout", async ({ browser, pa
             await page.keyboard.press("Escape");
         }
 
+        // The search launcher makes a search note inside the slice. Its parameters panel is where this
+        // layout puts the ribbon's search tab, and two of the things that panel offers are refused: a
+        // search script runs code, and executing a search's actions writes across the vault.
+        await app.launcherBar.locator(".bx-search").click();
+        const searchPanel = app.currentNoteSplit.locator(".search-definition-widget");
+        await expect(searchPanel).toBeVisible();
+        await expect(searchPanel.locator(".bxs-zap")).toHaveCount(0);
+        await expect(searchPanel.locator(".add-search-option .bx-code")).toHaveCount(0);
+
+        await searchPanel.locator(".search-string").fill(shape.stamp);
+        await page.keyboard.press("Enter");
+        const results = app.currentNoteSplit.locator(".search-results .note-book-title");
+        await expect(results.filter({ hasText: shape.titles.child })).toHaveCount(1);
+        for (const absent of [ shape.titles.outer, shape.titles.middle, shape.titles.elsewhere ]) {
+            await expect(results.filter({ hasText: absent })).toHaveCount(0);
+        }
+
         // An empty note offers the note-type switcher, which reads the vault's own templates.
         await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.sliceRoot }).first().click();
         await app.launcherBar.locator(".bx-file-blank").click();

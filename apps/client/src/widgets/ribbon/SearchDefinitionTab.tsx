@@ -1,6 +1,6 @@
 import "./SearchDefinitionTab.css";
 
-import { SaveSearchNoteResponse } from "@triliumnext/commons";
+import { isAttributeDangerous, SaveSearchNoteResponse } from "@triliumnext/commons";
 import { useContext, useEffect, useState } from "preact/hooks";
 import { Fragment } from "preact/jsx-runtime";
 
@@ -11,6 +11,7 @@ import bulk_action, { ACTION_GROUPS } from "../../services/bulk_action";
 import froca from "../../services/froca";
 import { t } from "../../services/i18n";
 import server from "../../services/server";
+import slice from "../../services/slice";
 import toast from "../../services/toast";
 import tree from "../../services/tree";
 import { getErrorMessage } from "../../services/utils";
@@ -37,7 +38,7 @@ export default function SearchDefinitionTab({ note, ntxId, hidden }: Pick<TabCon
         const availableOptions: SearchOption[] = [];
         const activeOptions: SearchOption[] = [];
 
-        for (const searchOption of SEARCH_OPTIONS) {
+        for (const searchOption of offeredSearchOptions()) {
             const attr = note.getAttribute(searchOption.attributeType, searchOption.attributeName);
             if (attr) {
                 activeOptions.push(searchOption);
@@ -113,7 +114,7 @@ export default function SearchDefinitionTab({ note, ntxId, hidden }: Pick<TabCon
                                         }
                                     />
 
-                                    <AddBulkActionButton note={note} />
+                                    {!slice.isSlice() && <AddBulkActionButton note={note} />}
                                 </td>
                             </tr>
                         </tbody>
@@ -138,6 +139,24 @@ export default function SearchDefinitionTab({ note, ntxId, hidden }: Pick<TabCon
             </div>
         </div>
     );
+}
+
+/**
+ * The search options on offer, and the note each one starts from.
+ *
+ * A dangerous option makes the search note run a script, which `slice_mask.ts` refuses whatever the
+ * link permits. An option that names a note starts at `root`, which is outside every slice, so inside
+ * one it starts at the note the link opens.
+ */
+export function offeredSearchOptions(): SearchOption[] {
+    if (!slice.isSlice()) {
+        return SEARCH_OPTIONS;
+    }
+
+    const sliceRootNoteId = slice.defaultRootNoteId();
+    return SEARCH_OPTIONS
+        .filter((option) => !isAttributeDangerous(option.attributeType, option.attributeName))
+        .map((option) => option.defaultValue === "root" ? { ...option, defaultValue: sliceRootNoteId } : option);
 }
 
 function SearchButtonBar({ note, refreshResults }: {
@@ -170,7 +189,9 @@ function SearchButtonBar({ note, refreshResults }: {
                         desktop={
                             <div className="search-actions-container">
                                 <Button icon="bx bx-search" text={t("search_definition.search_button")} keyboardShortcut="Enter" onClick={refreshResults} />
-                                <Button icon="bx bxs-zap" text={t("search_definition.search_execute")} onClick={searchAndExecuteActions} />
+                                {/* Executing a search's actions writes to every note it matched, which
+                                    `search-and-execute-note` does across the whole vault. */}
+                                {!slice.isSlice() && <Button icon="bx bxs-zap" text={t("search_definition.search_execute")} onClick={searchAndExecuteActions} />}
                                 {note.isHiddenCompletely() && <Button icon="bx bx-save" text={t("search_definition.save_to_note")} onClick={saveSearchNote} />}
                             </div>
                         }
@@ -179,7 +200,7 @@ function SearchButtonBar({ note, refreshResults }: {
                                 text={t("search_definition.search_button")} icon="bx bx-search"
                                 onClick={refreshResults}
                             >
-                                <FormListItem icon="bx bxs-zap" onClick={searchAndExecuteActions}>{t("search_definition.search_execute")}</FormListItem>
+                                {!slice.isSlice() && <FormListItem icon="bx bxs-zap" onClick={searchAndExecuteActions}>{t("search_definition.search_execute")}</FormListItem>}
                                 {note.isHiddenCompletely() && <FormListItem icon="bx bx-save" onClick={saveSearchNote}>{t("search_definition.save_to_note")}</FormListItem>}
                             </SplitButton>
                         }
