@@ -1,4 +1,5 @@
 import "./appearance.css";
+import "../../launch_bar/ColorSchemeSwitcher.css";
 
 import { FontFamily, OptionNames, SYSTEM_MONOSPACE_FONT_STACK, SYSTEM_SANS_SERIF_FONT_STACK } from "@triliumnext/commons";
 import clsx from "clsx";
@@ -61,7 +62,7 @@ const THEME_FAMILIES: ThemeFamily[] = [
 ];
 
 const COLOR_SCHEMES: SegmentedChoiceOption<ColorScheme>[] = [
-    { value: "system", label: t("theme.color_scheme_system"), icon: "bx-brightness-half" },
+    { value: "system", label: t("theme.color_scheme_system"), icon: "tn-scheme-system" },
     { value: "light", label: t("theme.color_scheme_light"), icon: "bx-sun" },
     { value: "dark", label: t("theme.color_scheme_dark"), icon: "bx-moon" }
 ];

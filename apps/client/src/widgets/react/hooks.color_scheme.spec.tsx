@@ -52,6 +52,14 @@ describe("useColorSchemeSwitcher", () => {
         expect(api?.isCustom).toBe(false);
     });
 
+    it("marks following the operating system with the fork's own icon, which boxicons has none for", async () => {
+        setStoredColorScheme("system");
+        await mount("next");
+
+        expect(api?.scheme).toBe("system");
+        expect(api?.icon).toBe("bx tn-scheme-system");
+    });
+
     it("stays inert for a custom theme, which has no light and dark variants", async () => {
         await mount("my-theme");
 
