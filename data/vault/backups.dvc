@@ -1,6 +1,6 @@
 outs:
-- md5: 12e502678cbbc87d4258fcc76731b067.dir
-  size: 340504576
-  nfiles: 6
+- md5: 9c26e51710d9e0819d3ec454ac373b6b.dir
+  size: 355119104
+  nfiles: 7
   hash: md5
   path: backups
