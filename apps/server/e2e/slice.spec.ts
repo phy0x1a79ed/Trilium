@@ -278,6 +278,21 @@ test("a slice offers nothing refused under the new layout", async ({ browser, pa
         await expect(attributeCard).toBeVisible();
         await expect(attributeCard.locator(".bx-plus").first()).toBeVisible();
 
+        // Setting a label, which is what that card is for. A plain label is created in the row itself,
+        // and the press that ends the editing is what saves it.
+        await attributeCard.locator(".attribute-add-row").click();
+        const creationEditor = attributeCard.locator(".attribute-creation-editor");
+        await expect(creationEditor).toBeVisible();
+        await creationEditor.locator(".attribute-creation-name input").fill("verified");
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("Enter");
+        await expect(attributeCard.getByText("verified")).toBeVisible();
+        // Read back from the vault rather than from the card, so the row is proof of a write.
+        const stored = await page.evaluate(async (noteId) =>
+            (await (await fetch(`/api/notes/${noteId}/attributes`)).json()) as { name: string }[],
+        shape.childNoteId);
+        expect(stored.map((attribute) => attribute.name)).toContain("verified");
+
         // The status bar's badges, each of which reads something about the note behind a dropdown.
         const badges = page.locator(".status-bar .actions-row .status-bar-dropdown-button");
         for (let index = 0; index < await badges.count(); index++) {
