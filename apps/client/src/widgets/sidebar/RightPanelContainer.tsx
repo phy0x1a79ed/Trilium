@@ -11,6 +11,7 @@ import { WidgetsByParent } from "../../services/bundle";
 import { t } from "../../services/i18n";
 import options from "../../services/options";
 import { DEFAULT_GUTTER_SIZE } from "../../services/resizer";
+import slice from "../../services/slice";
 import ActionButton from "../react/ActionButton";
 import Button from "../react/Button";
 import { useActiveNoteContext, useGetContextData, useLegacyWidget, useNoteProperty, useTriliumEvent, useTriliumOption, useTriliumOptionBool, useTriliumOptionJson } from "../react/hooks";
@@ -231,7 +232,9 @@ function useItems(rightPaneVisible: boolean, widgetsByParent: WidgetsByParent): 
         },
         {
             el: <Backlinks />,
-            enabled: !!note,
+            // Backlinks reach in from the whole vault, so `slice_mask.ts` refuses the route behind
+            // this card.
+            enabled: !!note && !slice.isSlice(),
             tab: "connections"
         },
         {

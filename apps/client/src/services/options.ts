@@ -1,6 +1,7 @@
 import { OptionNames } from "@triliumnext/commons";
 
 import server from "./server.js";
+import slice from "./slice.js";
 import { isPreAuthScreen, isShare } from "./utils.js";
 
 export type OptionValue = number | string;
@@ -74,6 +75,14 @@ class Options {
     }
 
     async save(key: OptionNames, value: OptionValue) {
+        if (slice.isSlice()) {
+            // Every option is synced and belongs to the vault owner, so `slice_mask.ts` refuses the
+            // write. Holding the value here lets a slice visitor move a pane or pick a tab for the
+            // length of their visit.
+            this.set(key, value);
+            return;
+        }
+
         const previous = this.arr?.[key];
         const save = (this.latestSave[key] ?? 0) + 1;
         this.latestSave[key] = save;
@@ -108,6 +117,14 @@ class Options {
      * @param newValues the record of keys and values.
      */
     async saveMany<T extends OptionNames>(newValues: Record<T, OptionValue>) {
+        if (slice.isSlice()) {
+            // See `save`: in a slice these values live in this cache alone.
+            for (const [ key, value ] of Object.entries(newValues)) {
+                this.set(key as OptionNames, value as OptionValue);
+            }
+            return;
+        }
+
         await server.put<void>("options", newValues);
     }
 
