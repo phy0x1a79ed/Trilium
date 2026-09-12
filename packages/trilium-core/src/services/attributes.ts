@@ -1,4 +1,4 @@
-import { type AttributeRow, BUILTIN_ATTRIBUTES } from "@triliumnext/commons";
+import { type AttributeRow, BUILTIN_ATTRIBUTES, isAttributeDangerous as isBuiltinAttributeDangerous } from "@triliumnext/commons";
 
 import searchService from "./search/services/search.js";
 import becca from "../becca/becca.js";
@@ -97,10 +97,6 @@ function isAttributeType(type: string): boolean {
     return ATTRIBUTE_TYPES.has(type);
 }
 
-function isAttributeDangerous(type: string, name: string): boolean {
-    return BUILTIN_ATTRIBUTES.some((attr) => attr.type === type && attr.name.toLowerCase() === name.trim().toLowerCase() && attr.isDangerous);
-}
-
 export default {
     getNotesWithLabel,
     getNoteWithLabel,
@@ -109,5 +105,5 @@ export default {
     createAttribute,
     getAttributeNames,
     isAttributeType,
-    isAttributeDangerous
+    isAttributeDangerous: isBuiltinAttributeDangerous
 };

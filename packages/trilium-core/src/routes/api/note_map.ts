@@ -5,6 +5,7 @@ import type { BacklinkCountResponse, BacklinksResponse, NoteMapNote } from "@tri
 import type { Request } from "express";
 
 import { findExcerpts, findLlmChatExcerpts, findMindMapExcerpts } from "../../services/backlink_excerpts";
+import { isNoteInSlice, readSliceContext } from "../../services/slice";
 
 interface TreeLink {
     sourceNoteId: string;
@@ -127,14 +128,20 @@ function getLinkMap(req: Request<{ noteId: string }>) {
         }).notes;
     }
 
-    const noteIds = new Set<string>(unfilteredNotes.filter((note) => ignoreExcludeFromNoteMap || !note.isLabelTruthy("excludeFromNoteMap")).map((note) => note.noteId));
+    const isVisible = mapVisibility(req);
+    const noteIds = new Set<string>(unfilteredNotes
+        .filter((note) => isVisible(note.noteId))
+        .filter((note) => ignoreExcludeFromNoteMap || !note.isLabelTruthy("excludeFromNoteMap"))
+        .map((note) => note.noteId));
 
     if (mapRootNote.type === "search") {
         noteIds.delete(mapRootNote.noteId);
     }
 
     for (const noteId of getNeighbors(mapRootNote, 3)) {
-        noteIds.add(noteId);
+        if (isVisible(noteId)) {
+            noteIds.add(noteId);
+        }
     }
 
     const noteIdsArray = Array.from(noteIds);
@@ -193,7 +200,9 @@ function getTreeMap(req: Request<{ noteId: string }>) {
         includeHidden: mapRootNote.isInHiddenSubtree()
     });
 
+    const isVisible = mapVisibility(req);
     const notes = subtree.notes
+        .filter((note) => isVisible(note.noteId))
         .filter((note) => ignoreExcludeFromNoteMap || !note.isLabelTruthy("excludeFromNoteMap"))
         .filter((note) => {
             if (note.type !== "image" || note.getChildNotes().length > 0) {
@@ -235,6 +244,18 @@ function getTreeMap(req: Request<{ noteId: string }>) {
         noteIdToDescendantCountMap,
         links
     };
+}
+
+/**
+ * Which notes a caller may be shown on a map.
+ *
+ * A public slice draws only what its link opens. Both maps need the test: a subtree walk resolves a
+ * search note into results anywhere in the vault, and `getNeighbors` follows relations three hops out
+ * in both directions.
+ */
+function mapVisibility(req: Request): (noteId: string) => boolean {
+    const rootNoteId = readSliceContext(req.headers)?.rootNoteId;
+    return rootNoteId ? (noteId: string) => isNoteInSlice(noteId, rootNoteId) : () => true;
 }
 
 function updateDescendantCountMapForSearch(noteIdToDescendantCountMap: Record<string, number>, relationships: { parentNoteId: string; childNoteId: string }[]) {

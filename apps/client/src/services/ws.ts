@@ -193,6 +193,15 @@ let entityChangeIdReachedListeners: {
     start: number;
 }[] = [];
 
+/**
+ * Resolves once the client has processed every entity change up to `desiredEntityChangeId`, or after
+ * {@link ENTITY_CHANGE_WAIT_LIMIT} whichever comes first.
+ *
+ * The bound matters for a public slice, where the server forwards only the entity changes it can place
+ * inside the slice: a change it cannot place is never announced, and a caller waiting on that number
+ * would wait for the life of the page. Giving up makes such a case a slow operation instead of a stuck
+ * one, and the log line names the number that never arrived.
+ */
 function waitForEntityChangeId(desiredEntityChangeId: number) {
     if (desiredEntityChangeId <= lastProcessedEntityChangeId) {
         return Promise.resolve();
@@ -200,14 +209,27 @@ function waitForEntityChangeId(desiredEntityChangeId: number) {
 
     console.debug(`Waiting for ${desiredEntityChangeId}, last processed is ${lastProcessedEntityChangeId}, last accepted ${lastAcceptedEntityChangeId}`);
 
-    return new Promise<void>((res, rej) => {
-        entityChangeIdReachedListeners.push({
+    return new Promise<void>((res) => {
+        const listener = {
             desiredEntityChangeId,
             resolvePromise: res,
             start: Date.now()
-        });
+        };
+        entityChangeIdReachedListeners.push(listener);
+
+        setTimeout(() => {
+            if (!entityChangeIdReachedListeners.includes(listener)) {
+                return;
+            }
+            entityChangeIdReachedListeners = entityChangeIdReachedListeners.filter((l) => l !== listener);
+            console.log(`Gave up waiting for entityChangeId ${desiredEntityChangeId}, last processed is ${lastProcessedEntityChangeId}.`);
+            res();
+        }, ENTITY_CHANGE_WAIT_LIMIT);
     });
 }
+
+/** How long a caller waits for an entity change id before carrying on without it. */
+const ENTITY_CHANGE_WAIT_LIMIT = 10000;
 
 function waitForMaxKnownEntityChangeId() {
     return waitForEntityChangeId(server.getMaxKnownEntityChangeId());

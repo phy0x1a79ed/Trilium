@@ -32,6 +32,48 @@ describe("Search API (core)", () => {
         expect(Array.isArray(res.body.searchResults)).toBe(true);
     });
 
+    it("confines a slice's searches to the subtree its link opens", async () => {
+        const token = "ZzSliceSearchTokenAsdf";
+        const { noteId: sliceRootId } = await createTextNote(api, { title: `Slice root ${token}` });
+        const { noteId: insideId } = await createTextNote(api, { parentNoteId: sliceRootId, title: `Inside ${token}` });
+        const { noteId: outsideId } = await createTextNote(api, { title: `Outside ${token}` });
+        const headers = { "x-awm-slice-root": sliceRootId };
+
+        const wide = await api.get<string[]>(`/api/search/${token}`);
+        expect(wide.body).toEqual(expect.arrayContaining([ sliceRootId, insideId, outsideId ]));
+
+        const sliced = await api.get<string[]>(`/api/search/${token}`, { headers });
+        expect(sliced.body).toEqual(expect.arrayContaining([ sliceRootId, insideId ]));
+        expect(sliced.body).not.toContain(outsideId);
+
+        const quick = await api.get<{ searchResultNoteIds: string[] }>(`/api/quick-search/${token}`, { headers });
+        expect(quick.body.searchResultNoteIds).toContain(insideId);
+        expect(quick.body.searchResultNoteIds).not.toContain(outsideId);
+    });
+
+    it("clamps a search note's own ancestor to the slice it lives in", async () => {
+        const token = "ZzSliceAncestorTokenAsdf";
+        const { noteId: sliceRootId } = await createTextNote(api, { title: "Ancestor slice root" });
+        const { noteId: insideId } = await createTextNote(api, { parentNoteId: sliceRootId, title: `Inside ${token}` });
+        const { noteId: outsideId } = await createTextNote(api, { title: `Outside ${token}` });
+
+        const created = await api.post<{ note: { noteId: string } }>(
+            `/api/notes/${sliceRootId}/children?target=into`,
+            { body: { title: "A search", type: "search", content: "",
+                      attributes: [ { type: "label", name: "searchString", value: token } ] } });
+        const searchNoteId = created.body.note.noteId;
+        // A visitor can point the search note anywhere; inside a slice the relation cannot widen it.
+        await api.put(`/api/notes/${searchNoteId}/relations/ancestor/to/root`);
+
+        const wide = await api.get<{ searchResultNoteIds: string[] }>(`/api/search-note/${searchNoteId}`);
+        expect(wide.body.searchResultNoteIds).toEqual(expect.arrayContaining([ insideId, outsideId ]));
+
+        const sliced = await api.get<{ searchResultNoteIds: string[] }>(
+            `/api/search-note/${searchNoteId}`, { headers: { "x-awm-slice-root": sliceRootId } });
+        expect(sliced.body.searchResultNoteIds).toContain(insideId);
+        expect(sliced.body.searchResultNoteIds).not.toContain(outsideId);
+    });
+
     it("lists template note ids including a freshly-labelled template", async () => {
         const { noteId } = await createTextNote(api, { title: "A template note" });
         await api.post(`/api/notes/${noteId}/attributes`, {

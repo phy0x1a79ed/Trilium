@@ -196,8 +196,15 @@ function noteIdsForSliceCheck(entityChange: EntityChange): string[] | null {
             const ownerId = (entityChange.entity as { ownerId?: string } | undefined)?.ownerId;
             return ownerId ? [ ownerId ] : null;
         }
+        case "blobs":
+            // The one arm that names no note and is forwarded anyway. A blob is content-addressed and
+            // has no owner, so the change says only that some content was stored -- no id, no title, no
+            // bytes. It is also usually the highest-numbered change a create writes, and the client
+            // waits for that number before it returns from creating a note, so dropping it hangs the
+            // create rather than narrowing it.
+            return [];
         default:
-            // options, blobs, etapi_tokens, and any future entity type: dropped for a slice connection.
+            // options, etapi_tokens, and any future entity type: dropped for a slice connection.
             return null;
     }
 }
