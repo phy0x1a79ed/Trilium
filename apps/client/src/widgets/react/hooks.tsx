@@ -2009,7 +2009,7 @@ export function useColorScheme() {
 }
 
 const COLOR_SCHEME_ICONS: Record<ColorScheme, string> = {
-    system: "bx bx-brightness-half",
+    system: "bx tn-scheme-system",
     light: "bx bx-sun",
     dark: "bx bx-moon"
 };

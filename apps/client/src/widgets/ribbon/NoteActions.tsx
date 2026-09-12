@@ -37,9 +37,9 @@ const isNewLayout = isExperimentalFeatureEnabled("new-layout");
 export default function NoteActions() {
     const { note, ntxId, noteContext } = useNoteContext();
 
-    // Everything behind this menu writes to the vault, exports it or reaches a route a slice cannot
-    // call, so a visitor is shown no menu rather than one that refuses.
-    if (slice.isSlice()) {
+    // Every entry behind this menu edits the note or exports it, so a link that only reads is shown
+    // no menu rather than one that refuses.
+    if (slice.isReadOnly()) {
         return null;
     }
 
@@ -104,6 +104,9 @@ export function NoteContextMenu({ note, noteContext, itemsAtStart, itemsNearNote
     const isElectron = getIsElectron();
     const isMac = getIsMac();
     const isMobile = getIsMobile();
+    // Importing, exporting, converting and reading OCR text each reach a route `slice_mask.ts`
+    // refuses, so they are left out of the menu a slice shows rather than shown and refused.
+    const isVaultWide = !slice.isSlice();
     const hasSource = ["text", "code", "relationMap", "mermaid", "canvas", "mindMap", "spreadsheet", "llmChat"].includes(noteType) || note.isSvg();
     const isSearchOrBook = ["search", "book"].includes(noteType);
     const isHelpPage = note.noteId.startsWith("_help");
@@ -152,21 +155,23 @@ export function NoteContextMenu({ note, noteContext, itemsAtStart, itemsNearNote
                 <FormDropdownDivider />
 
                 {isNewLayout && isNormalViewMode && !isHelpPage && <>
-                    <NoteBasicProperties note={note} focus={itemToFocusRef} />
+                    <NoteBasicProperties note={note} focus={itemToFocusRef} isVaultWide={isVaultWide} />
                     <FormDropdownDivider />
                 </>}
 
                 {itemsNearNoteSettings}
 
-                <CommandItem icon="bx bx-import" text={t("note_actions.import_files")}
-                    disabled={isInOptionsOrHelp || note.type === "search"}
-                    command={() => parentComponent?.triggerCommand("showImportDialog", { noteId: note.noteId })} />
-                <CommandItem icon="bx bx-export" text={t("note_actions.export_note")}
-                    disabled={isInOptionsOrHelp || note.noteId === "_backendLog"}
-                    command={() => noteContext?.notePath && parentComponent?.triggerCommand("showExportDialog", {
-                        notePath: noteContext.notePath,
-                        defaultType: "single"
-                    })} />
+                {isVaultWide && <>
+                    <CommandItem icon="bx bx-import" text={t("note_actions.import_files")}
+                        disabled={isInOptionsOrHelp || note.type === "search"}
+                        command={() => parentComponent?.triggerCommand("showImportDialog", { noteId: note.noteId })} />
+                    <CommandItem icon="bx bx-export" text={t("note_actions.export_note")}
+                        disabled={isInOptionsOrHelp || note.noteId === "_backendLog"}
+                        command={() => noteContext?.notePath && parentComponent?.triggerCommand("showExportDialog", {
+                            notePath: noteContext.notePath,
+                            defaultType: "single"
+                        })} />
+                </>}
                 {isExportableToImage && isNormalViewMode && isContentAvailable && <ExportAsImage ntxId={noteContext.ntxId} parentComponent={parentComponent} />}
                 {isExportableToXlsx && isNormalViewMode && isContentAvailable && (
                     <>
@@ -192,7 +197,7 @@ export function NoteContextMenu({ note, noteContext, itemsAtStart, itemsNearNote
 
                 <FormDropdownDivider />
 
-                {canBeConvertedToAttachment && <ConvertToAttachment note={note} />}
+                {isVaultWide && canBeConvertedToAttachment && <ConvertToAttachment note={note} />}
                 {note.type === "render" && <CommandItem command="renderActiveNote" icon="bx bx-extension" text={t("note_actions.re_render_note")}
                 />}
 
@@ -200,14 +205,16 @@ export function NoteContextMenu({ note, noteContext, itemsAtStart, itemsNearNote
                     <CommandItem command="openNoteExternally" icon="bx bx-file-find" disabled={isSearchOrBook || !isElectron} text={t("note_actions.open_note_externally")} title={t("note_actions.open_note_externally_title")} />
                     <CommandItem command="openNoteCustom" icon="bx bx-customize" disabled={isSearchOrBook || isMac || !isElectron} text={t("note_actions.open_note_custom")} />
                     <CommandItem command="showNoteSource" icon="bx bx-code" disabled={!hasSource} text={t("note_actions.note_source")} />
-                    {(note.type === "text" || note.isMarkdown()) && isContentAvailable && !isInOptionsOrHelp &&
+                    {isVaultWide && (note.type === "text" || note.isMarkdown()) && isContentAvailable && !isInOptionsOrHelp &&
                         <ConvertNoteFormat note={note} />}
                     {/* Always the note-level dialog, an image note included: it has children of its
                         own, and reaching them is what makes this "images" and not "image". */}
-                    <CommandItem icon="bx bx-collapse-alt" text={t("compress-images")}
-                        disabled={isInOptionsOrHelp || !isContentAvailable}
-                        command={() => void showImageCompressionDialog({ type: "note", noteId: note.noteId })} />
-                    <CommandItem command="showNoteOCRText" icon="bx bx-text" disabled={!["image", "file"].includes(noteType) || !isContentAvailable} text={t("note_actions.view_ocr_text")} />
+                    {isVaultWide && <>
+                        <CommandItem icon="bx bx-collapse-alt" text={t("compress-images")}
+                            disabled={isInOptionsOrHelp || !isContentAvailable}
+                            command={() => void showImageCompressionDialog({ type: "note", noteId: note.noteId })} />
+                        <CommandItem command="showNoteOCRText" icon="bx bx-text" disabled={!["image", "file"].includes(noteType) || !isContentAvailable} text={t("note_actions.view_ocr_text")} />
+                    </>}
                     {(syncServerHost && isElectron) &&
                         <CommandItem command="openNoteOnServer" icon="bx bx-world" disabled={!syncServerHost} text={t("note_actions.open_note_on_server")} />
                     }
@@ -247,9 +254,10 @@ function CodeProperties({ note }: { note: FNote }) {
     );
 }
 
-function NoteBasicProperties({ note, focus }: {
+function NoteBasicProperties({ note, focus, isVaultWide }: {
     note: FNote;
     focus: RefObject<ItemToFocus>;
+    isVaultWide: boolean;
 }) {
     const itemToFocusRef = useRef<HTMLLIElement>(null);
     const [ isBookmarked, setIsBookmarked ] = useNoteBookmarkState(note);
@@ -265,27 +273,29 @@ function NoteBasicProperties({ note, focus }: {
     }, [ focus ]);
 
     return <>
-        <FormListToggleableItem
-            icon="bx bx-share-alt"
-            title={t("shared_switch.shared")}
-            currentValue={isShared} onChange={switchShareState}
-            helpPage="R9pX4DGra2Vt"
-            disabled={["root", "_share", "_hidden"].includes(note?.noteId ?? "") || note?.noteId.startsWith("_options")}
-            itemRef={itemToFocusRef}
-        />
-        <FormListToggleableItem
-            icon="bx bx-lock-alt"
-            title={t("protect_note.toggle-on")}
-            currentValue={!!isProtected} onChange={shouldProtect => protected_session.protectNote(note.noteId, shouldProtect, false)}
-        />
-        <FormListToggleableItem
-            icon="bx bx-bookmark"
-            title={t("bookmark_switch.bookmark")}
-            currentValue={isBookmarked} onChange={setIsBookmarked}
-            disabled={["root", "_hidden"].includes(note?.noteId ?? "")}
-        />
+        {isVaultWide && <>
+            <FormListToggleableItem
+                icon="bx bx-share-alt"
+                title={t("shared_switch.shared")}
+                currentValue={isShared} onChange={switchShareState}
+                helpPage="R9pX4DGra2Vt"
+                disabled={["root", "_share", "_hidden"].includes(note?.noteId ?? "") || note?.noteId.startsWith("_options")}
+                itemRef={itemToFocusRef}
+            />
+            <FormListToggleableItem
+                icon="bx bx-lock-alt"
+                title={t("protect_note.toggle-on")}
+                currentValue={!!isProtected} onChange={shouldProtect => protected_session.protectNote(note.noteId, shouldProtect, false)}
+            />
+            <FormListToggleableItem
+                icon="bx bx-bookmark"
+                title={t("bookmark_switch.bookmark")}
+                currentValue={isBookmarked} onChange={setIsBookmarked}
+                disabled={["root", "_hidden"].includes(note?.noteId ?? "")}
+            />
 
-        <FormDropdownDivider />
+            <FormDropdownDivider />
+        </>}
 
         <NoteTypeDropdown note={note} />
         <EditabilityDropdown note={note} />

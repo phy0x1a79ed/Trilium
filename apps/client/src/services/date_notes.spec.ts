@@ -159,6 +159,42 @@ describe("date_notes", () => {
         expect(result).toBe(note);
     });
 
+    it("createSearchNote files a slice's search note under the note its link opens", async () => {
+        glob.sliceRootNoteId = "sliceRoot";
+        const note = buildNote({ title: "Search in a slice" });
+        server.post = vi.fn(async () => ({ note: { noteId: note.noteId } })) as unknown as typeof server.post;
+
+        const result = await dateNotes.createSearchNote({ searchString: "foo" });
+
+        expect(server.post).toHaveBeenCalledWith("notes/sliceRoot/children?target=into", expect.objectContaining({
+            type: "search",
+            attributes: [
+                { type: "label", name: "searchString", value: "foo" },
+                { type: "label", name: "keepCurrentHoisting", value: "" },
+                { type: "relation", name: "ancestor", value: "sliceRoot" }
+            ]
+        }));
+        expect(result).toBe(note);
+
+        glob.sliceRootNoteId = undefined;
+    });
+
+    it("createSearchNote keeps a slice's own ancestor when one is asked for", async () => {
+        glob.sliceRootNoteId = "sliceRoot";
+        const note = buildNote({ title: "Search in a subtree" });
+        server.post = vi.fn(async () => ({ note: { noteId: note.noteId } })) as unknown as typeof server.post;
+
+        await dateNotes.createSearchNote({ searchString: "foo", ancestorNoteId: "inside" });
+
+        expect(server.post).toHaveBeenCalledWith("notes/sliceRoot/children?target=into", expect.objectContaining({
+            attributes: expect.arrayContaining([
+                { type: "relation", name: "ancestor", value: "inside" }
+            ])
+        }));
+
+        glob.sliceRootNoteId = undefined;
+    });
+
     it("createLlmChat posts and resolves the note", async () => {
         const note = buildNote({ title: "LLM chat" });
         server.post = vi.fn(async () => ({ noteId: note.noteId })) as typeof server.post;

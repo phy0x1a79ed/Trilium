@@ -1,8 +1,10 @@
-import { dayjs } from "@triliumnext/commons";
+import { type CreateChildrenResponse, dayjs } from "@triliumnext/commons";
 
 import type { FNoteRow } from "../entities/fnote.js";
 import froca from "./froca.js";
+import { t } from "./i18n.js";
 import server from "./server.js";
+import slice from "./slice.js";
 import ws from "./ws.js";
 
 async function getInboxNote() {
@@ -76,8 +78,43 @@ async function createSqlConsole() {
     return await froca.getNote(note.noteId);
 }
 
-async function createSearchNote(opts = {}) {
+async function createSearchNote(opts: SearchNoteOpts = {}) {
+    if (slice.isSlice()) {
+        return await createSliceSearchNote(opts);
+    }
+
     const note = await server.post<FNoteRow>("special-notes/search-note", opts);
+
+    await ws.waitForMaxKnownEntityChangeId();
+
+    return await froca.getNote(note.noteId);
+}
+
+export interface SearchNoteOpts {
+    searchString?: string | null;
+    ancestorNoteId?: string | null;
+}
+
+/**
+ * A search note inside a public slice, created through the ordinary create route.
+ *
+ * `/api/special-notes/search-note` files it under `_search` in the hidden subtree, outside every
+ * slice. It lands as a child of the note the link opens instead, where the visitor can see it and
+ * delete it, and its `~ancestor` is what bounds the search the server runs.
+ */
+async function createSliceSearchNote({ searchString, ancestorNoteId }: SearchNoteOpts) {
+    const parentNoteId = slice.defaultRootNoteId();
+    const { note } = await server.post<CreateChildrenResponse>(`notes/${parentNoteId}/children?target=into`, {
+        title: t("slice_launcher.search_note_title", { searchString: searchString ?? "" }),
+        content: "",
+        type: "search",
+        mime: "application/json",
+        attributes: [
+            { type: "label", name: "searchString", value: searchString ?? "" },
+            { type: "label", name: "keepCurrentHoisting", value: "" },
+            { type: "relation", name: "ancestor", value: ancestorNoteId || parentNoteId }
+        ]
+    });
 
     await ws.waitForMaxKnownEntityChangeId();
 

@@ -14,6 +14,7 @@ import mime_types from "../../services/mime_types";
 import { NOTE_TYPES } from "../../services/note_types";
 import protected_session from "../../services/protected_session";
 import server from "../../services/server";
+import slice from "../../services/slice";
 import sync from "../../services/sync";
 import toast from "../../services/toast";
 import Dropdown from "../react/Dropdown";
@@ -29,13 +30,17 @@ import { ContentLanguagesList } from "../type_widgets/options/i18n";
 import { TabContext } from "./ribbon-interface";
 
 export default function BasicPropertiesTab({ note }: TabContext) {
+    // Protecting needs a vault-wide session, and bookmarking and sharing place the note under a
+    // hidden parent outside the slice, so all three name something `slice_mask.ts` refuses.
+    const isVaultWide = !slice.isSlice();
+
     return (
         <div className="basic-properties-widget">
             <NoteTypeWidget note={note} />
-            <ProtectedNoteSwitch note={note} />
+            {isVaultWide && <ProtectedNoteSwitch note={note} />}
             <EditabilitySelect note={note} />
-            <BookmarkSwitch note={note} />
-            <SharedSwitch note={note} />
+            {isVaultWide && <BookmarkSwitch note={note} />}
+            {isVaultWide && <SharedSwitch note={note} />}
             <TemplateSwitch note={note} />
             <NoteLanguageSwitch note={note} />
         </div>

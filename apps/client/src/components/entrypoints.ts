@@ -10,6 +10,7 @@ import linkService from "../services/link.js";
 import options from "../services/options.js";
 import protectedSessionHolder from "../services/protected_session_holder.js";
 import server from "../services/server.js";
+import slice from "../services/slice.js";
 import toastService from "../services/toast.js";
 import utils from "../services/utils.js";
 import ws from "../services/ws.js";
@@ -26,7 +27,7 @@ export default class Entrypoints extends Component {
     }
 
     async createNoteIntoInboxCommand() {
-        const inboxNote = await dateNoteService.getInboxNote();
+        const inboxNote = await newNoteParent();
         if (!inboxNote) {
             console.warn("Missing inbox note.");
             return;
@@ -240,4 +241,24 @@ export default class Entrypoints extends Component {
         await server.post(`notes/${noteId}/revision`, { description: name || undefined });
         toastService.showMessage(t("entrypoints.note-revision-created"));
     }
+}
+
+/**
+ * Where the new-note launcher creates.
+ *
+ * The inbox is an option naming a note of the vault owner's choosing, and `/api/special-notes/inbox`
+ * is refused inside a slice, so a slice creates beside what the visitor is looking at. A search note
+ * takes no children, so the note the link opens stands in for one.
+ */
+async function newNoteParent() {
+    if (!slice.isSlice()) {
+        return await dateNoteService.getInboxNote();
+    }
+
+    const activeNoteId = appContext.tabManager.getActiveContextNoteId();
+    const activeNote = activeNoteId ? await froca.getNote(activeNoteId) : null;
+    if (activeNote && activeNote.type !== "search") {
+        return activeNote;
+    }
+    return await froca.getNote(slice.defaultRootNoteId());
 }

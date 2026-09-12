@@ -41,9 +41,9 @@ export default function MobileDetailMenu() {
         });
     }
 
-    // Every entry behind this menu writes to the vault or calls a route `slice_mask.ts` refuses, so
-    // a visitor gets no menu — only the way out of a split, which is client-side.
-    if (slice.isSlice()) {
+    // Every entry behind this menu edits the note, so a link that only reads gets no menu — only the
+    // way out of a split, which is client-side.
+    if (slice.isReadOnly()) {
         return isMainContext ? null : (
             <ActionButton
                 icon="bx bx-x"
@@ -53,6 +53,10 @@ export default function MobileDetailMenu() {
         );
     }
 
+    // Backlinks and similar notes both report notes from across the vault, which is why
+    // `slice_mask.ts` refuses the routes behind them.
+    const isVaultWide = !slice.isSlice();
+
     return (
         <div style={{ contain: "none" }}>
             {note ? (
@@ -61,13 +65,13 @@ export default function MobileDetailMenu() {
                     note={note} noteContext={noteContext}
                     itemsAtStart={<>
                         <div className="form-list-row">
-                            <div className="form-list-col">
+                            {isVaultWide && <div className="form-list-col">
                                 <FormListItem
                                     icon="bx bx-link"
                                     onClick={() => setBacklinksModalShown(true)}
                                     disabled={backlinksCount === 0}
                                 >{t("status_bar.backlinks", { count: backlinksCount })}</FormListItem>
-                            </div>
+                            </div>}
                             <div className="form-list-col">
                                 <FormListItem
                                     icon="bx bx-directions"
@@ -108,7 +112,7 @@ export default function MobileDetailMenu() {
                         {note.type === "text" && <ContentLanguageSelector note={note} />}
                         {note.type === "code" && <FormListItem icon={"bx bx-code"} onClick={() => setCodeNoteSwitcherModalShown(true)}>{t("status_bar.code_note_switcher")}</FormListItem>}
                         <FormListItem icon="bx bx-info-circle" onClick={() => setNoteInfoModalShown(true)}>{t("note_info_widget.title")}</FormListItem>
-                        <FormListItem icon="bx bx-bar-chart" onClick={() => setSimilarNotesModalShown(true)}>{t("similar_notes.title")}</FormListItem>
+                        {isVaultWide && <FormListItem icon="bx bx-bar-chart" onClick={() => setSimilarNotesModalShown(true)}>{t("similar_notes.title")}</FormListItem>}
                         <FormDropdownDivider />
                     </>}
                 />

@@ -11,6 +11,7 @@ import searchService, { EMPTY_RESULT, type SearchNoteResult } from "../../servic
 import { ValidationError } from "../../errors.js";
 import becca_service from "../../becca/becca_service.js";
 import { getHoistedNoteId } from "../../services/context.js";
+import { readSliceContext } from "../../services/slice.js";
 
 /** The maximum age in days for a template to be marked as new. */
 const NEW_TEMPLATE_MAX_AGE = 3;
@@ -31,7 +32,7 @@ function searchFromNote(req: Request<{ noteId: string }>): SearchNoteResult {
         throw new ValidationError(`Note '${req.params.noteId}' is not a search note.`);
     }
 
-    return searchService.searchFromNote(note);
+    return searchService.searchFromNote(note, readSliceContext(req.headers)?.rootNoteId);
 }
 
 function searchAndExecute(req: Request<{ noteId: string }>) {
@@ -61,7 +62,7 @@ function quickSearch(req: Request<{ searchString: string }>) {
         includeHiddenNotes: true,
         fuzzyAttributeSearch: true,
         ignoreInternalAttributes: true,
-        ancestorNoteId: hoistedNoteService.isHoistedInHiddenSubtree() ? "root" : hoistedNoteService.getHoistedNoteId()
+        ancestorNoteId: searchScope(req)
     });
 
     // Execute search with our context
@@ -104,15 +105,31 @@ function quickSearch(req: Request<{ searchString: string }>) {
 
 function search(req: Request<{ searchString: string }>) {
     const { searchString } = req.params;
+    const sliceRootNoteId = readSliceContext(req.headers)?.rootNoteId;
 
     const searchContext = new SearchContext({
         fastSearch: false,
         includeArchivedNotes: true,
         fuzzyAttributeSearch: false,
-        ignoreHoistedNote: true
+        ignoreHoistedNote: !sliceRootNoteId,
+        ancestorNoteId: sliceRootNoteId
     });
 
     return searchService.findResultsWithQuery(searchString, searchContext).map((sr) => sr.noteId);
+}
+
+/**
+ * The subtree a search may look in.
+ *
+ * A public slice searches what its link opens and nothing else, taken from the edge's headers rather
+ * than from the hoisted note, which the client states for itself and therefore proves nothing.
+ */
+function searchScope(req: Request) {
+    const sliceRootNoteId = readSliceContext(req.headers)?.rootNoteId;
+    if (sliceRootNoteId) {
+        return sliceRootNoteId;
+    }
+    return hoistedNoteService.isHoistedInHiddenSubtree() ? "root" : hoistedNoteService.getHoistedNoteId();
 }
 
 function getRelatedNotes(req: Request) {

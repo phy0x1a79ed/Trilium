@@ -1,3 +1,5 @@
+import { isAttributeDangerous } from "@triliumnext/commons";
+
 import becca from "../becca/becca.js";
 
 /**
@@ -57,6 +59,88 @@ export function isNoteInSlice(noteId: string, rootNoteId: string): boolean {
 /** The note an attachment hangs off, so an attachment is judged by where its owner lives. */
 export function noteIdOfAttachment(attachmentId: string): string | null {
     return becca.getAttachment(attachmentId)?.ownerId ?? null;
+}
+
+/**
+ * Both notes a branch joins.
+ *
+ * A move, a delete, a prefix change and an expand all name a branch and nothing else, and each of them
+ * changes the parent as much as the child, so both ends are checked together. A branch becca does not
+ * hold yields `null`, which the caller reads as a refusal.
+ */
+export function noteIdsOfBranch(branchId: string): string[] | null {
+    const branch = becca.getBranch(branchId);
+    return branch ? [ branch.noteId, branch.parentNoteId ] : null;
+}
+
+/** The note a revision belongs to, so a revision is judged by where its note lives. */
+export function noteIdOfRevision(revisionId: string): string | null {
+    return becca.getRevision(revisionId)?.noteId ?? null;
+}
+
+/** An attribute as a write body carries it, before any route has validated it. */
+export interface IncomingAttribute {
+    type: string;
+    name: string;
+    value: string;
+}
+
+/**
+ * Every attribute a write body names, whatever shape the route takes it in.
+ *
+ * Four shapes between them: a bare attribute, an array of them, an update carrying an `attributeId`
+ * alongside, and a create body whose `attributes` array `createNewNote` applies atomically. All four
+ * are read the same way here so one guard covers the set.
+ */
+export function attributesInBody(body: unknown): IncomingAttribute[] {
+    const nested = body && typeof body === "object" && !Array.isArray(body)
+        ? (body as Record<string, unknown>).attributes
+        : undefined;
+    const rows = Array.isArray(body) ? body : [ body, ...(Array.isArray(nested) ? nested : []) ];
+    const attributes: IncomingAttribute[] = [];
+    for (const row of rows) {
+        if (row && typeof row === "object") {
+            const { type, name, value } = row as Record<string, unknown>;
+            if (typeof type === "string" && typeof name === "string") {
+                attributes.push({ type, name, value: typeof value === "string" ? value : "" });
+            }
+        }
+    }
+    return attributes;
+}
+
+/**
+ * Whether an attribute makes a note run code, which a slice visitor must never be able to set.
+ *
+ * The code runs in the vault owner's browser under the owner's session, so this is the one thing full
+ * write inside the boundary does not include. Re-exported rather than reimplemented: `BUILTIN_ATTRIBUTES`
+ * is the vault's own list of what executes, and a name marked dangerous there is refused here without
+ * anyone editing this module.
+ */
+export const isDangerousAttribute = isAttributeDangerous;
+
+/**
+ * Note ids a write body names beyond the ones in its path: the template a new note copies, and the
+ * target of every relation the body carries.
+ *
+ * A relation's value is always a note id, so a non-blank one is returned for the membership check and a
+ * blank one — which is how a relation is cleared — is left alone. A value naming no note at all fails
+ * the membership check, which is the fail-closed reading.
+ */
+export function noteIdsInBody(body: unknown): string[] {
+    const noteIds: string[] = [];
+    if (body && typeof body === "object" && !Array.isArray(body)) {
+        const templateNoteId = (body as Record<string, unknown>).templateNoteId;
+        if (typeof templateNoteId === "string" && templateNoteId) {
+            noteIds.push(templateNoteId);
+        }
+    }
+    for (const attribute of attributesInBody(body)) {
+        if (attribute.type === "relation" && attribute.value.trim()) {
+            noteIds.push(attribute.value.trim());
+        }
+    }
+    return noteIds;
 }
 
 type IncomingHeaders = Record<string, string | string[] | undefined>;

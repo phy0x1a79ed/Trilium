@@ -395,9 +395,9 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
             titlesTabbable: true,
             keyboard: true,
             toggleEffect: options.is("motionEnabled") ? undefined : false,
-            // A slice never loads `dnd5`: neutering its callbacks would still leave a live drop
-            // target, and an OS file drop never passes through `dragStart`.
-            extensions: slice.isSlice() ? ["clones", "filter"] : ["dnd5", "clones", "filter"],
+            // A read-only slice never loads `dnd5`: neutering its callbacks would still leave a live
+            // drop target, and an OS file drop never passes through `dragStart`.
+            extensions: slice.isReadOnly() ? ["clones", "filter"] : ["dnd5", "clones", "filter"],
             source: treeData,
             scrollOfs: {
                 top: 100,
@@ -963,7 +963,7 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
             node = this.getNodesByNoteId(hoistedNoteId)[0];
         }
 
-        const branchIds = slice.isSlice()
+        const branchIds = keepsExpandedStateLocal(node.data.noteId)
             ? subtreeBranchIds(node.data.branchId)
             : (await server.put<ExpandedSubtreeResponse>(`branches/${node.data.branchId}/expanded-subtree/${isExpanded ? 1 : 0}`)).branchIds;
 
@@ -1577,8 +1577,7 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 
         branch.isExpanded = isExpanded;
 
-        // The expanded state belongs to the vault's owner, and a slice has no route to write it.
-        if (!slice.isSlice()) {
+        if (!keepsExpandedStateLocal(branch.noteId)) {
             server.put(`branches/${branchId}/expanded/${isExpanded ? 1 : 0}`);
         }
     }
@@ -1885,9 +1884,18 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 }
 
 /**
- * The branch ids at and under `branchId`, read from froca because a slice cannot ask the server to
- * record an expansion. The visited set stops a note cloned under one of its own ancestors from
- * walking forever.
+ * Whether the expanded state of this note's branch stays in froca instead of being recorded on the
+ * server. A read-only link writes nothing at all, and the branch holding the slice root names a
+ * parent outside the slice, which `slice_mask.ts` refuses whatever the link permits.
+ */
+function keepsExpandedStateLocal(noteId: string): boolean {
+    return slice.isReadOnly() || noteId === slice.getSliceRootNoteId();
+}
+
+/**
+ * The branch ids at and under `branchId`, read from froca because a slice that keeps its expanded
+ * state local cannot ask the server for them. The visited set stops a note cloned under one of its
+ * own ancestors from walking forever.
  */
 function subtreeBranchIds(branchId: string): string[] {
     const collected: string[] = [];
@@ -1913,9 +1921,9 @@ function subtreeBranchIds(branchId: string): string[] {
 }
 
 function buildEnhanceTitle() {
-    // A slice creates nothing, hoists nothing and never unhoists — unhoisting would put the whole
-    // vault back on screen — so those three buttons are never built rather than built and refused.
+    // A slice hoists nothing and never unhoists, since unhoisting would put the whole vault on screen.
     const offersTreeActions = !slice.isSlice();
+    const offersCreateChild = !slice.isReadOnly();
     const createChildTemplate = document.createElement("span");
     createChildTemplate.className = "tree-item-button tn-icon add-note-button bx bx-plus";
     createChildTemplate.title = t("note_tree.create-child-note");
@@ -1965,7 +1973,7 @@ function buildEnhanceTitle() {
 
         // TODO: Deduplicate with server's notes.ts#getAndValidateParent
         const isSubtreeHidden = note.isLabelTruthy("subtreeHidden");
-        if (offersTreeActions
+        if (offersCreateChild
             && !["search", "launcher"].includes(note.type)
             && !note.isOptions()
             && !note.isLaunchBarConfig()

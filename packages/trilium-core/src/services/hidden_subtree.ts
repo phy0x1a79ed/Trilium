@@ -151,6 +151,16 @@ function buildHiddenSubtreeDefinition(helpSubtree: HiddenSubtreeItem[]): HiddenS
                 ]
             },
             {
+                id: "_sharedSlices",
+                title: t("hidden-subtree.shared-slices-title"),
+                type: "contentWidget",
+                icon: "bx-link",
+                attributes: [
+                    { type: "label", name: "keepCurrentHoisting" },
+                    { type: "label", name: "fullContentWidth" }
+                ]
+            },
+            {
                 id: "_customDictionary",
                 title: t("hidden-subtree.custom-dictionary-title"),
                 type: "code",

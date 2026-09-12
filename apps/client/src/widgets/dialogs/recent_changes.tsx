@@ -5,6 +5,7 @@ import dateNoteService from "../../services/date_notes";
 import dialog from "../../services/dialog";
 import { t } from "../../services/i18n";
 import server from "../../services/server";
+import slice from "../../services/slice";
 import toast from "../../services/toast";
 import Dropdown from "../react/Dropdown";
 import { FormDropdownDivider, FormListItem } from "../react/FormList";
@@ -95,7 +96,7 @@ export default function RecentChangesDialog() {
             className={`recent-changes-dialog ${deletedOnly ? "recent-changes-dialog-view-mode-deleted-only" : "recent-changes-dialog-view-mode-all-changes"}`}
             size="lg"
             scrollable
-            header={
+            header={!slice.isSlice() && (
                 <Dropdown
                     className="recent-changes-actions"
                     buttonClassName="custom-title-bar-button bx bx-dots-horizontal-rounded"
@@ -120,7 +121,7 @@ export default function RecentChangesDialog() {
                         >{t("recent_changes.deleted_notes_settings")}</FormListItem>
                     </>}
                 </Dropdown>
-            }
+            )}
             onHidden={() => setShown(false)}
             show={shown}
         >

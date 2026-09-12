@@ -44,7 +44,7 @@ export interface HiddenSubtreeItem {
     isExpanded?: boolean;
     baseSize?: string;
     growthFactor?: string;
-    targetNoteId?: "_backendLog" | "_globalNoteMap";
+    targetNoteId?: "_backendLog" | "_globalNoteMap" | "_sharedSlices";
     builtinWidget?:
         | "todayInJournal"
         | "bookmarks"

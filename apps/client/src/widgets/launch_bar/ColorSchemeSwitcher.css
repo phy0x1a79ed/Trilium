@@ -1,3 +1,26 @@
+/*
+ * The mark for following the operating system, which boxicons has nothing for: a circle with one
+ * half filled and an A across the middle, cut out of the filled half and solid in the empty one.
+ * Drawn as one even-odd shape so the A reads as the negative of whichever half it crosses.
+ *
+ * Filled with the colour of the text around it, the way the boxicons beside it are, and sized in
+ * `em` so it follows the font size an icon is given wherever the switcher is mounted.
+ */
+.tn-scheme-system {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.15em;
+    background-color: currentColor;
+    -webkit-mask-image: url("./scheme-system.svg");
+    mask-image: url("./scheme-system.svg");
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
 /* Both mounts of the switcher: the launcher and the tab-row toggle. */
 .color-scheme-switcher {
     &.unsupported {

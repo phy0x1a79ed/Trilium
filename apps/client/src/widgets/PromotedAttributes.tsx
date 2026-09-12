@@ -8,6 +8,7 @@ import { Dispatch, StateUpdater, useCallback, useEffect, useState } from "preact
 import NoteContext from "../components/note_context";
 import FAttribute from "../entities/fattribute";
 import FNote from "../entities/fnote";
+import { queryAttributeValues } from "../services/attribute_autocomplete";
 import { Attribute } from "../services/attribute_parser";
 import attributes from "../services/attributes";
 import { t } from "../services/i18n";
@@ -59,10 +60,9 @@ export default function PromotedAttributes({ omit }: {
     omit?: readonly string[];
 } = {}) {
     const { note, componentId, noteContext } = useNoteContext();
-    // Each field writes through `PUT /api/notes/:noteId/attribute`, which `slice_mask.ts` does not
-    // name, so a visitor is shown no fields rather than fields that refuse.
-    const inSlice = slice.isSlice();
-    const [ cells, setCells ] = usePromotedAttributeData(inSlice ? null : note, componentId, noteContext);
+    // Each field writes through `PUT /api/notes/:noteId/attribute`, which a link that only reads
+    // cannot call, so it is shown no fields rather than fields that refuse.
+    const [ cells, setCells ] = usePromotedAttributeData(slice.isReadOnly() ? null : note, componentId, noteContext);
     const shown = omit?.length ? cells?.filter((cell) => !omit.includes(cell.valueName)) : cells;
     return <PromotedAttributesContent note={note} componentId={componentId} cells={shown} setCells={setCells} />;
 }
@@ -393,7 +393,7 @@ function useTextLabelAutocomplete(inputId: string, valueAttr: Attribute, definit
             return;
         }
 
-        server.get<string[]>(`attribute-values/${encodeURIComponent(valueAttr.name)}`).then((_attributesValues) => {
+        queryAttributeValues(valueAttr.name).then((_attributesValues) => {
             setAttributeValues(_attributesValues.map((attribute) => ({ value: attribute })));
         });
     }, [ definition.labelType, valueAttr.name ]);

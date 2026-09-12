@@ -13,7 +13,7 @@ import utils from "../../services/utils";
 import NoteList from "../collections/NoteList";
 import slice from "../../services/slice";
 import FloatingButtons from "../FloatingButtons";
-import { DESKTOP_FLOATING_BUTTONS, POPUP_HIDDEN_FLOATING_BUTTONS } from "../FloatingButtonsDefinitions";
+import { DESKTOP_FLOATING_BUTTONS, POPUP_HIDDEN_FLOATING_BUTTONS, sliceFloatingButtons } from "../FloatingButtonsDefinitions";
 import TitleRow from "../layout/TitleRow";
 import NoteDetail from "../NoteDetail";
 import PromotedAttributes from "../PromotedAttributes";
@@ -35,7 +35,10 @@ export default function PopupEditor() {
     const modalRef = useRef<HTMLDivElement>(null);
     const isMobile = utils.isMobile();
     const items = useMemo(() => {
-        const baseItems = isMobile ? [] : DESKTOP_FLOATING_BUTTONS;
+        if (isMobile) {
+            return [];
+        }
+        const baseItems = slice.isSlice() ? sliceFloatingButtons(slice.canWrite()) : DESKTOP_FLOATING_BUTTONS;
         return baseItems.filter(item => !POPUP_HIDDEN_FLOATING_BUTTONS.includes(item));
     }, [ isMobile ]);
 
@@ -156,7 +159,7 @@ export default function PopupEditor() {
                         ? <MobileEditorToolbar inPopupEditor />
                         : <StandaloneRibbonAdapter component={FormattingToolbar} show={showFormattingToolbar} />}
 
-                    {!slice.isSlice() && <FloatingButtons items={items} />}
+                    <FloatingButtons items={items} />
                     <NoteDetail />
                     <NoteList media="screen" displayOnlyCollections />
                 </Modal>

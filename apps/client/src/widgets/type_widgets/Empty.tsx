@@ -27,9 +27,7 @@ export default function Empty({ ntxId }: TypeWidgetProps) {
 
 function NoteSearch({ ntxId }: { ntxId: string | null }) {
     if (isMobile()) {
-        // The mobile placeholder opens the jump-to-note dialog, whose command list names actions
-        // across the whole vault.
-        return slice.isSlice() ? null : <MobileNoteSearch />;
+        return <MobileNoteSearch />;
     }
 
     return <DesktopNoteSearch ntxId={ntxId} />;
@@ -66,8 +64,8 @@ function DesktopNoteSearch({ ntxId }: { ntxId: string | null }) {
                     inputRef={autocompleteRef}
                     opts={{
                         hideGoToSelectedNoteButton: true,
-                        allowCreatingNotes: !slice.isSlice(),
-                        allowJumpToSearchNotes: !slice.isSlice(),
+                        allowCreatingNotes: !slice.isReadOnly(),
+                        allowJumpToSearchNotes: !slice.isReadOnly(),
                     }}
                     onChange={suggestion => {
                         if (!suggestion?.notePath) {

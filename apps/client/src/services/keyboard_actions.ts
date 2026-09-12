@@ -31,15 +31,23 @@ async function getActions() {
 
 async function getActionsForScope(scope: string) {
     const actions = await keyboardActionsLoaded;
-    const inSlice = slice.isSlice();
+    const allowed = sliceActions();
 
     return actions.filter((action) => action.scope === scope
-        && (!inSlice || SLICE_ACTIONS.has(action.actionName)));
+        && (!allowed || allowed.has(action.actionName)));
+}
+
+/** The actions the slice on screen binds keys for, or `null` outside a slice, where every action binds. */
+function sliceActions(): ReadonlySet<KeyboardActionNames> | null {
+    if (!slice.isSlice()) {
+        return null;
+    }
+    return slice.canWrite() ? WRITABLE_SLICE_ACTIONS : SLICE_ACTIONS;
 }
 
 /**
  * The actions a public slice binds keys for. Everything else creates, deletes, moves, searches or
- * saves an option, none of which `slice_mask.ts` names a route for.
+ * saves an option, none of which `slice_mask.ts` names a route for a link that only reads.
  *
  * Filtered here rather than at the loader, because the repository must stay complete: `getAction`
  * throws on a name it does not hold, and tooltips still ask it for shortcuts.
@@ -47,6 +55,7 @@ async function getActionsForScope(scope: string) {
 const SLICE_ACTIONS: ReadonlySet<KeyboardActionNames> = new Set([
     "backInNoteHistory", "forwardInNoteHistory", "followLinkUnderCursor",
     "scrollToActiveNote", "expandSubtree", "collapseTree", "collapseSubtree",
+    "jumpToNote", "showRecentChanges",
     "openNewTab", "closeActiveTab", "reopenLastTab", "activateNextTab", "activatePreviousTab",
     "firstTab", "secondTab", "thirdTab", "fourthTab", "fifthTab", "sixthTab", "seventhTab",
     "eigthTab", "ninthTab", "lastTab",
@@ -54,6 +63,26 @@ const SLICE_ACTIONS: ReadonlySet<KeyboardActionNames> = new Set([
     "moveActiveNoteSplitRight", "focusNoteSplitLeft", "focusNoteSplitRight",
     "findInText", "copyWithoutFormatting", "printActiveNote", "reloadFrontendApp",
     "toggleRibbonTabClassicEditor", "toggleRibbonTabNoteInfo"
+]);
+
+/**
+ * What a link permitting writes binds on top of the set above: the keys for the tree edits, the
+ * attribute edits and the revision writes the mask admits inside the slice boundary.
+ */
+const WRITABLE_SLICE_ACTIONS: ReadonlySet<KeyboardActionNames> = new Set([
+    ...SLICE_ACTIONS,
+    "createNoteAfter", "createNoteInto", "deleteNotes", "duplicateSubtree", "sortChildNotes",
+    "moveNoteUp", "moveNoteDown", "moveNoteUpInHierarchy", "moveNoteDownInHierarchy",
+    "editNoteTitle", "editBranchPrefix",
+    "cutNotesToClipboard", "copyNotesToClipboard", "pasteNotesFromClipboard",
+    "moveNotesTo", "cloneNotesTo",
+    "selectAllNotesInParent", "addNoteAboveToSelection", "addNoteBelowToSelection",
+    "addNewLabel", "addNewRelation",
+    "addLinkToText", "addIncludeNoteToText", "insertDateTimeToText", "pasteMarkdownIntoText",
+    "cutIntoNote", "editReadOnlyNote", "searchInSubtree",
+    "showRevisions", "forceSaveRevision", "saveNamedRevision",
+    "toggleRibbonTabBasicProperties", "toggleRibbonTabOwnedAttributes", "toggleRibbonTabNotePaths",
+    "toggleRibbonTabFileProperties", "toggleRibbonTabImageProperties"
 ]);
 
 async function setupActionsForElement(scope: string, $el: JQuery<HTMLElement>, component: Component, ntxId: string | null | undefined) {

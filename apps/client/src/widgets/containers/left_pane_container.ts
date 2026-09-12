@@ -1,5 +1,4 @@
 import options from "../../services/options.js";
-import resizer from "../../services/resizer.js";
 import slice from "../../services/slice.js";
 import FlexContainer from "./flex_container.js";
 import appContext, { type EventData } from "../../components/app_context.js";
@@ -11,7 +10,9 @@ export default class LeftPaneContainer extends FlexContainer<Component> {
     constructor() {
         super("column");
 
-        this.currentLeftPaneVisible = options.is("leftPaneVisible");
+        // A slice carries no left-pane toggle, so its tree is always shown rather than following the
+        // owner's own `leftPaneVisible`, which a visitor could neither see nor change.
+        this.currentLeftPaneVisible = slice.isSlice() || options.is("leftPaneVisible");
 
         this.id("left-pane");
         this.css("height", "100%");
@@ -20,14 +21,6 @@ export default class LeftPaneContainer extends FlexContainer<Component> {
 
     isEnabled() {
         return super.isEnabled() && this.currentLeftPaneVisible;
-    }
-
-    initialRenderCompleteEvent() {
-        // `LeftPaneToggle` normally sizes this pane, and it lives in the launcher pane a slice does
-        // not have. Without the resizer, Split never runs and the pane renders zero pixels wide.
-        if (slice.isSlice()) {
-            resizer.setupLeftPaneResizer(this.currentLeftPaneVisible);
-        }
     }
 
     setLeftPaneVisibilityEvent({ leftPaneVisible }: EventData<"setLeftPaneVisibility">) {

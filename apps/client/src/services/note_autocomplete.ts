@@ -131,23 +131,23 @@ async function autocompleteSource(term: string, cb: (rows: Suggestion[]) => void
 
     options.fastSearch = true;
 
-    // The search itself is answered for a slice, scoped server-side to the subtree the link opens.
-    // The rows appended below are not: creating a note and opening a search note both need routes a
-    // slice has no rule for, so they are left out here rather than at each caller.
-    const isSlice = slice.isSlice();
+    // The search itself is answered for a slice, scoped server-side to the subtree the link opens. The
+    // two rows appended below both create a note, one of them a search note, so they need a link that
+    // writes: inside a slice a create lands under the active note and a search note under the root.
+    const canCreateHere = !slice.isReadOnly();
 
-    if (length >= 1 && options.allowCreatingNotes && !isSlice) {
+    if (length >= 1 && options.allowCreatingNotes && canCreateHere) {
         results = [
             {
                 action: "create-note",
                 noteTitle: term,
-                parentNoteId: activeNoteId || "root",
+                parentNoteId: activeNoteId || slice.defaultRootNoteId(),
                 highlightedNotePathTitle: t("note_autocomplete.create-note", { term })
             } as Suggestion
         ].concat(results);
     }
 
-    if (length >= 1 && options.allowJumpToSearchNotes && !isSlice) {
+    if (length >= 1 && options.allowJumpToSearchNotes && canCreateHere) {
         results = results.concat([
             {
                 action: "search-notes",
@@ -272,7 +272,7 @@ function initNoteAutocomplete($el: JQuery<HTMLElement>, options?: Options) {
     }
 
     // The shortcut for the "Search for …" row, so it goes wherever that row goes.
-    if (options.allowJumpToSearchNotes && !slice.isSlice()) {
+    if (options.allowJumpToSearchNotes && !slice.isReadOnly()) {
         $el.on("keydown", (event) => {
             if (event.ctrlKey && event.key === "Enter") {
                 // Prevent Ctrl + Enter from triggering autoComplete.

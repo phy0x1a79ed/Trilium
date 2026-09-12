@@ -11,6 +11,7 @@ import type { CommandData, FilteredCommandNames } from "../../../components/app_
 import FAttribute from "../../../entities/fattribute";
 import FNote from "../../../entities/fnote";
 import contextMenu from "../../../menus/context_menu";
+import { queryAttributeNames } from "../../../services/attribute_autocomplete";
 import attribute_parser, { Attribute } from "../../../services/attribute_parser";
 import attribute_renderer from "../../../services/attribute_renderer";
 import attributes, { isBuiltinAttribute } from "../../../services/attributes";
@@ -446,7 +447,7 @@ interface AttributeNameItem {
 }
 
 export async function fetchAttributeNames(type: "label" | "relation", queryText: string): Promise<AttributeNameItem[]> {
-    const names = await server.get<string[]>(`attribute-names/?type=${type}&query=${encodeURIComponent(queryText)}`);
+    const names = await queryAttributeNames(type, queryText);
     const marker = type === "label" ? "#" : "~";
 
     return names.map((name) => ({ id: `${marker}${name}`, name }));

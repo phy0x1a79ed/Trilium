@@ -308,7 +308,25 @@ describe("WebSocketMessagingProvider", () => {
             ]);
         });
 
-        it("drops an entity type it cannot map to a note, keeping the rest of the message", () => {
+        it("forwards the removal of a branch, whose note becca no longer holds", () => {
+            const { server } = init();
+            const tagged = connect(server, SLICE_HEADERS);
+
+            provider.sendMessageToAllClients({
+                type: "frontend-update",
+                data: {
+                    lastSyncedPush: 1,
+                    entityChanges: [
+                        { entityName: "branches", entityId: "b3", entity: { noteId: "gone", parentNoteId: "inside" }, hash: "h1", isSynced: true, isErased: false }
+                    ]
+                }
+            } as WebSocketMessage);
+
+            const received = JSON.parse(tagged.sent[0]);
+            expect(received.data.entityChanges.map((c: any) => c.entityId)).toEqual([ "b3" ]);
+        });
+
+        it("forwards a blob change, which names no note and is what a create waits for", () => {
             const { server } = init();
             const tagged = connect(server, SLICE_HEADERS);
 
@@ -328,7 +346,7 @@ describe("WebSocketMessagingProvider", () => {
             provider.sendMessageToAllClients(message);
 
             const received = JSON.parse(tagged.sent[0]);
-            expect(received.data.entityChanges.map((c: any) => c.entityName)).toEqual(["notes"]);
+            expect(received.data.entityChanges.map((c: any) => c.entityName)).toEqual(["notes", "blobs"]);
         });
 
         it("sends nothing to a tagged connection when filtering empties the message", () => {

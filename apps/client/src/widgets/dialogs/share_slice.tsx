@@ -78,15 +78,6 @@ function ShareSliceDialog({ noteId, noteTitle, onClosed }: {
         }
     }
 
-    async function revoke(slice: SliceInfo) {
-        if (!await dialogService.confirm(t("share_slice.revoke_confirm"))) {
-            return;
-        }
-        await server.remove(`slices/${slice.token}`);
-        toast.showMessage(t("share_slice.revoked"));
-        await reload();
-    }
-
     return (
         <Modal
             className="share-slice-dialog"
@@ -144,18 +135,11 @@ function ShareSliceDialog({ noteId, noteTitle, onClosed }: {
                     ? <NoItems icon="bx bx-link" text={t("share_slice.none")} size="small" />
                     : <ul className="share-slice-list">
                         {slices.map((slice) => (
-                            <li key={slice.token}>
-                                <div className="share-slice-url">{slice.url}</div>
-                                <div className="share-slice-terms">{describe(slice)}</div>
-                                <ActionButton
-                                    icon="bx bx-copy" text={t("info.copy_to_clipboard")}
-                                    onClick={() => copyTextWithToast(slice.url)}
-                                />
-                                <ActionButton
-                                    icon="bx bx-trash" text={t("share_slice.revoke")}
-                                    onClick={() => void revoke(slice)}
-                                />
-                            </li>
+                            <SliceLinkRow
+                                key={slice.token}
+                                slice={slice}
+                                onRevoked={() => void reload()}
+                            />
                         ))}
                     </ul>}
         </Modal>
@@ -172,17 +156,62 @@ function expiryOptions() {
     ];
 }
 
-/** Who a link is for and what it permits, in one line under the link itself. */
-function describe(slice: SliceInfo): string {
+/**
+ * One link as its owner sees it: the address, what it permits, and the two things to do with it.
+ *
+ * Shared with the shared-slices screen, which lists the same rows across the whole vault, so a link
+ * reads and revokes the same way wherever it is shown. The row is an `<li>`, so a host puts it in a
+ * `share-slice-list`.
+ */
+export function SliceLinkRow({ slice, onRevoked }: {
+    slice: SliceInfo;
+    /** Called once the link is gone, for the host to read its list again. */
+    onRevoked: () => void;
+}) {
+    return (
+        <li className="share-slice-row">
+            <div className="share-slice-url">{slice.url}</div>
+            <div className="share-slice-terms">{describeSliceTerms(slice)}</div>
+            <ActionButton
+                icon="bx bx-copy" text={t("info.copy_to_clipboard")}
+                onClick={() => copyTextWithToast(slice.url)}
+            />
+            {slice.active && <ActionButton
+                icon="bx bx-trash" text={t("share_slice.revoke")}
+                onClick={() => void revokeAndReport(slice, onRevoked)}
+            />}
+        </li>
+    );
+}
+
+/** Who a link is for, what it permits, when it was handed out, and when it stopped resolving. */
+export function describeSliceTerms(slice: SliceInfo): string {
     const parts = [
         slice.user
             ? t("share_slice.bound_to", { user: slice.user })
             : t("share_slice.open_to_anyone"),
-        slice.write ? t("share_slice.can_edit") : t("share_slice.read_only")
+        slice.write ? t("share_slice.can_edit") : t("share_slice.read_only"),
+        t("share_slice.created_on", { date: formatSliceDate(slice.createdAt) })
     ];
-    if (slice.expiresAt) {
-        const date = new Date(slice.expiresAt * 1000).toLocaleString();
-        parts.push(t("share_slice.expires_on", { date }));
+    if (slice.revokedAt) {
+        parts.push(t("share_slice.revoked_on", { date: formatSliceDate(slice.revokedAt) }));
+    } else if (slice.expiresAt) {
+        const expiry = slice.active ? "share_slice.expires_on" : "share_slice.expired_on";
+        parts.push(t(expiry, { date: formatSliceDate(slice.expiresAt) }));
     }
     return parts.join(" · ");
+}
+
+async function revokeAndReport(slice: SliceInfo, onRevoked: () => void) {
+    if (!await dialogService.confirm(t("share_slice.revoke_confirm"))) {
+        return;
+    }
+    await server.remove(`slices/${slice.token}`);
+    toast.showMessage(t("share_slice.revoked"));
+    onRevoked();
+}
+
+/** awm keeps its timestamps in seconds, which `Date` reads in milliseconds. */
+function formatSliceDate(seconds: number): string {
+    return new Date(seconds * 1000).toLocaleString();
 }

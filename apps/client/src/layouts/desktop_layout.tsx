@@ -25,9 +25,10 @@ import PasswordNoteSetDialog from "../widgets/dialogs/password_not_set.js";
 import UploadAttachmentsDialog from "../widgets/dialogs/upload_attachments.js";
 import FindWidget from "../widgets/find.js";
 import FloatingButtons from "../widgets/FloatingButtons.jsx";
-import { DESKTOP_FLOATING_BUTTONS } from "../widgets/FloatingButtonsDefinitions.jsx";
+import { DESKTOP_FLOATING_BUTTONS, sliceFloatingButtons } from "../widgets/FloatingButtonsDefinitions.jsx";
 import HighlightsListWidget from "../widgets/highlights_list.js";
 import LauncherContainer from "../widgets/launch_bar/LauncherContainer.jsx";
+import SliceLauncherBar from "../widgets/launch_bar/SliceLauncherBar.jsx";
 import SpacerWidget from "../widgets/launch_bar/SpacerWidget.jsx";
 import InlineTitle from "../widgets/layout/InlineTitle.jsx";
 import NoteBadges from "../widgets/layout/NoteBadges.jsx";
@@ -67,12 +68,12 @@ export default class DesktopLayout {
 
         const launcherPaneIsHorizontal = options.get("layoutOrientation") === "horizontal";
         const launcherPane = this.#buildLauncherPane(launcherPaneIsHorizontal);
-        // The launcher pane and quick search would only offer a visitor commands the slice mask
-        // refuses (jump to note, global search, settings, launcher config, new note): a slice
-        // visitor never sees them, on top of the mask that would 403 the request underneath.
-        const showLauncherPane = !slice.isSlice();
+        // Quick search and the left-pane toggle stay out of a slice: the toggle saves the owner's
+        // `leftPaneVisible` option, and what a slice offers is the fixed bar `SliceLauncherBar` holds.
+        const inSlice = slice.isSlice();
         const isElectron = utils.isElectron();
         const hasNativeTitleBar = window.glob.hasNativeTitleBar;
+        const floatingButtons = slice.isSlice() ? sliceFloatingButtons(slice.canWrite()) : DESKTOP_FLOATING_BUTTONS;
 
         /**
          * If true, the tab bar is displayed above the launcher pane with full width; if false (default), the tab bar is displayed in the rest pane.
@@ -91,7 +92,7 @@ export default class DesktopLayout {
                 new FlexContainer("row")
                     .class("tab-row-container")
                     .child(new FlexContainer("row").id("tab-row-left-spacer"))
-                    .optChild(launcherPaneIsHorizontal, <LeftPaneToggle isHorizontalLayout={true} />)
+                    .optChild(launcherPaneIsHorizontal && !inSlice, <LeftPaneToggle isHorizontalLayout={true} />)
                     .child(<TabHistoryNavigationButtons />)
                     .child(new TabRowWidget().class("full-width"))
                     .child(<ColorSchemeToggle />)
@@ -100,15 +101,15 @@ export default class DesktopLayout {
                     .css("background-color", "var(--launcher-pane-background-color)")
                     .setParent(appContext)
             )
-            .optChild(launcherPaneIsHorizontal && showLauncherPane, launcherPane)
+            .optChild(launcherPaneIsHorizontal, launcherPane)
             .child(
                 new FlexContainer("row")
                     .css("flex-grow", "1")
                     .id("horizontal-main-container")
-                    .optChild(!launcherPaneIsHorizontal && showLauncherPane, launcherPane)
+                    .optChild(!launcherPaneIsHorizontal, launcherPane)
                     .child(
                         new LeftPaneContainer()
-                            .optChild(!launcherPaneIsHorizontal && showLauncherPane, new QuickSearchWidget())
+                            .optChild(!launcherPaneIsHorizontal && !inSlice, new QuickSearchWidget())
                             .child(appContext.noteTreeWidget)
                             .child(...this.customWidgets.get("left-pane"))
                     )
@@ -154,7 +155,7 @@ export default class DesktopLayout {
                                                             .optChild(isNewLayout, <NoteActions />))
                                                         .optChild(!isNewLayout, <LazyComponent loader={() => import("../widgets/ribbon/Ribbon.jsx")} />)
                                                         .child(new WatchedFileUpdateStatusWidget())
-                                                        .optChild(!isNewLayout && !slice.isSlice(), <FloatingButtons items={DESKTOP_FLOATING_BUTTONS} />)
+                                                        .optChild(!isNewLayout, <FloatingButtons items={floatingButtons} />)
                                                         .child(
                                                             new ScrollingContainer()
                                                                 .filling()
@@ -202,7 +203,12 @@ export default class DesktopLayout {
     #buildLauncherPane(isHorizontal: boolean) {
         let launcherPane;
 
-        if (isHorizontal) {
+        if (slice.isSlice()) {
+            launcherPane = new FlexContainer(isHorizontal ? "row" : "column")
+                .class(isHorizontal ? "horizontal" : "vertical")
+                .css(isHorizontal ? "height" : "width", "53px")
+                .child(<SliceLauncherBar isHorizontalLayout={isHorizontal} />);
+        } else if (isHorizontal) {
             launcherPane = new FlexContainer("row")
                 .css("height", "53px")
                 .class("horizontal")

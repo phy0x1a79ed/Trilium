@@ -10,6 +10,7 @@ import hoistedNoteService from "../../hoisted_note.js";
 import { getLog } from "../../log.js";
 import scriptService from "../../script.js";
 import { isScriptingEnabled } from "../../scripting_guard.js";
+import { isNoteInSlice } from "../../slice.js";
 import { escapeHtml, escapeRegExp, unescapeHtml } from "../../utils/index.js";
 import type Expression from "../expressions/expression.js";
 import SearchContext from "../search_context.js";
@@ -32,7 +33,11 @@ export const EMPTY_RESULT: SearchNoteResult = {
     error: null
 };
 
-function searchFromNote(note: BNote): SearchNoteResult {
+/**
+ * @param sliceRootNoteId confines the search to one subtree whatever the note's own `~ancestor` says,
+ *                        for a caller the edge has placed inside a public slice.
+ */
+function searchFromNote(note: BNote, sliceRootNoteId?: string): SearchNoteResult {
     let searchResultNoteIds;
     let highlightedTokens: string[];
 
@@ -46,7 +51,7 @@ function searchFromNote(note: BNote): SearchNoteResult {
     } else {
         const searchContext = new SearchContext({
             fastSearch: note.hasLabel("fastSearch"),
-            ancestorNoteId: note.getRelationValue("ancestor") || undefined,
+            ancestorNoteId: ancestorWithin(note.getRelationValue("ancestor") || undefined, sliceRootNoteId),
             ancestorDepth: note.getLabelValue("ancestorDepth") || undefined,
             includeArchivedNotes: note.hasLabel("includeArchivedNotes"),
             orderBy: note.getLabelValue("orderBy") || undefined,
@@ -328,6 +333,20 @@ function performSearch(expression: Expression, searchContext: SearchContext, ena
     }
 
     return searchResults;
+}
+
+/**
+ * The subtree a search note is allowed to search.
+ *
+ * A search note carries its own `~ancestor`, which a slice visitor can set to any note. Inside a slice
+ * that relation narrows the search and never widens it: an ancestor outside the slice falls back to the
+ * slice's own root.
+ */
+function ancestorWithin(ancestorNoteId: string | undefined, sliceRootNoteId: string | undefined) {
+    if (!sliceRootNoteId) {
+        return ancestorNoteId;
+    }
+    return ancestorNoteId && isNoteInSlice(ancestorNoteId, sliceRootNoteId) ? ancestorNoteId : sliceRootNoteId;
 }
 
 /**

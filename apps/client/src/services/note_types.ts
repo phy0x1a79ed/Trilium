@@ -8,6 +8,7 @@ import { isExperimentalFeatureEnabled } from "./experimental_features.js";
 import froca from "./froca.js";
 import { t } from "./i18n.js";
 import server from "./server.js";
+import slice from "./slice.js";
 
 export interface NoteTypeMapping {
     type: NoteType;
@@ -118,9 +119,16 @@ function buildNoteTypeItems(data: NoteTypeData, command?: TreeCommandNames) {
 
 /** Builds a single note type menu. Use {@link loadNoteTypeData} directly to build several. */
 async function getNoteTypeItems(command?: TreeCommandNames) {
+    if (slice.isSlice()) {
+        return getBlankNoteTypes(command);
+    }
     return buildNoteTypeItems(await loadNoteTypeData(), command);
 }
 
+/**
+ * The note types that need nothing from the vault around them, which is what a public slice offers:
+ * {@link loadNoteTypeData} reads the template notes, and those live outside every slice.
+ */
 function getBlankNoteTypes(command?: TreeCommandNames): MenuItem<TreeCommandNames>[] {
     return NOTE_TYPES
         .filter((nt) => !nt.reserved && nt.type !== "book")
@@ -235,5 +243,6 @@ function getBuiltInTemplates(title: string | null, command: TreeCommandNames | u
 export default {
     loadNoteTypeData,
     buildNoteTypeItems,
+    getBlankNoteTypes,
     getNoteTypeItems
 };

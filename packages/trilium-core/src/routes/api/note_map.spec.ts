@@ -115,8 +115,8 @@ describe("Note map service", () => {
     });
 });
 
-function req(noteId: string, body: Record<string, unknown> = {}) {
-    return { params: { noteId }, body } as any;
+function req(noteId: string, body: Record<string, unknown> = {}, headers: Record<string, string> = {}) {
+    return { params: { noteId }, body, headers } as any;
 }
 
 describe("Note map service (branch coverage)", () => {
@@ -240,6 +240,26 @@ describe("Note map service (branch coverage)", () => {
         const exNames = excluded.links.map((l) => l.name);
         expect(exNames).toContain("enemy");
         expect(exNames).not.toContain("friend");
+    });
+
+    it("getLinkMap: a slice draws what its link opens, dropping a neighbour outside it", () => {
+        buildNote({ id: "smOutside", title: "Outside" });
+        const mapRoot = buildNote({
+            id: "smRoot",
+            title: "Slice root",
+            "~friend": "smOutside",
+            children: [ { id: "smInside", title: "Inside" } ]
+        });
+
+        const whole = note_map.getLinkMap(req(mapRoot.noteId)) as LinkMapResponse;
+        expect(whole.notes.map(([ noteId ]) => noteId)).toContain("smOutside");
+        expect(whole.links.map((l) => l.name)).toContain("friend");
+
+        const sliced = note_map.getLinkMap(
+            req(mapRoot.noteId, {}, { "x-awm-slice-root": "smRoot" })) as LinkMapResponse;
+        expect(sliced.notes.map(([ noteId ]) => noteId)).not.toContain("smOutside");
+        // A link needs both of its ends on the map, so the relation reaching out goes with it.
+        expect(sliced.links).toEqual([]);
     });
 
     it("keeps archived notes only for a map rooted at an archived note", () => {

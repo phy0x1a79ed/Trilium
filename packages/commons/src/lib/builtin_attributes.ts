@@ -370,6 +370,20 @@ const BUILTIN_ATTRIBUTES = [
  */
 export default BUILTIN_ATTRIBUTES as readonly (BuiltinLabel | BuiltinRelation)[];
 
+/**
+ * Whether an attribute executes or embeds content, and so must be neutralised on import and refused
+ * from a public slice.
+ *
+ * Lives beside the list rather than in a service, because both the backend and the slice mask ask the
+ * question and neither should carry a second copy of the answer. The name is trimmed and compared
+ * case-insensitively, which is how Trilium's own importer reads it.
+ */
+export function isAttributeDangerous(type: string, name: string): boolean {
+    const wanted = name.trim().toLowerCase();
+    return BUILTIN_ATTRIBUTES.some(
+        (attr) => attr.type === type && attr.name.toLowerCase() === wanted && "isDangerous" in attr && attr.isDangerous);
+}
+
 type BuiltinAttributeEntry = (typeof BUILTIN_ATTRIBUTES)[number];
 type LabelEntry = Extract<BuiltinAttributeEntry, { type: "label" }>;
 type RelationEntry = Extract<BuiltinAttributeEntry, { type: "relation" }>;

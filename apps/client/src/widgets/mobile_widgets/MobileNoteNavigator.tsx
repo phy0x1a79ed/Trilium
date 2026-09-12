@@ -263,7 +263,7 @@ export default function MobileNoteNavigator() {
                             <div className="mobile-navigator-current-header">
                                 <Icon icon={parentIcon ?? "bx bx-folder"} className="mobile-navigator-current-icon" />
                                 <span className="mobile-navigator-current-title">{parentTitle ?? parentNote.title}</span>
-                                {!slice.isSlice() && (
+                                {!slice.isReadOnly() && (
                                     <button
                                         type="button"
                                         className="mobile-navigator-current-action"

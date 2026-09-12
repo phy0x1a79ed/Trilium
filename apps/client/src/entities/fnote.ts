@@ -243,12 +243,11 @@ export default class FNote {
 
     /**
      * Returns true if the note's metadata (title, icon) should not be editable.
-     * This applies to system notes like options, help, and launch bar configuration, and to every
-     * note in a public slice: `slice_mask.ts` names a route for the body and none for a title or
-     * an icon.
+     * This applies to system notes like options, help, and launch bar configuration, and to a note in
+     * a read-only public slice, where `slice_mask.ts` admits no write at all.
      */
     get isMetadataReadOnly() {
-        return slice.isSlice()
+        return slice.isReadOnly()
             || utils.isLaunchBarConfig(this.noteId)
             || this.noteId.startsWith("_help_")
             || this.noteId.startsWith("_options");

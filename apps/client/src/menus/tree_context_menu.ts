@@ -102,6 +102,8 @@ function resolveContext(ctx: TreeContextMenuContext) {
     };
 }
 
+type ResolvedTreeContextMenuContext = ReturnType<typeof resolveContext>;
+
 /**
  * Build the list of context menu items for `ctx`. Callers render via
  * `contextMenu.show({ items })` and dispatch selections with
@@ -113,17 +115,7 @@ export async function buildTreeContextMenuItems(ctx: TreeContextMenuContext): Pr
     const isMobileTarget = target === "mobile";
 
     if (slice.isSlice()) {
-        // Every other entry writes to the vault or reaches a route `slice_mask.ts` refuses, and a
-        // greyed row is still an affordance. Built here rather than filtered out of the list below,
-        // so an entry added by the next upstream merge is absent until somebody adds it.
-        const singleNote = resolved.selectedOrActiveNoteIds.length <= 1;
-
-        return [
-            { title: t("tree-context-menu.open-in-a-new-tab"), command: "openInTab", shortcut: "Ctrl+Click", uiIcon: "bx bx-link-external", enabled: singleNote },
-            { title: t("tree-context-menu.open-in-a-new-split"), command: "openNoteInSplit", uiIcon: "bx bx-dock-right", enabled: singleNote },
-            { title: t("tree-context-menu.open-in-popup"), command: "openNoteInPopup", uiIcon: "bx bx-edit", enabled: singleNote },
-            { title: t("tree-context-menu.copy-note-path-to-clipboard"), command: "copyNotePathToClipboard", uiIcon: "bx bx-directions", enabled: true }
-        ];
+        return buildSliceContextMenuItems(resolved);
     }
 
     const isNotRoot = note.noteId !== "root";
@@ -377,6 +369,140 @@ export async function buildTreeContextMenuItems(ctx: TreeContextMenuContext): Pr
     ];
 
     return items.filter((row) => row !== null) as MenuItem<TreeCommandNames>[];
+}
+
+/**
+ * The tree context menu a public slice shows.
+ *
+ * Built as its own list rather than filtered from the one above, so an entry added by the next
+ * upstream merge is absent until somebody adds it. A link that only reads gets the four entries that
+ * open a note; a link that writes gets what `slice_mask.ts` admits inside the boundary, which stops
+ * short of protecting, importing, exporting and converting a note.
+ */
+function buildSliceContextMenuItems(resolved: ResolvedTreeContextMenuContext): MenuItem<TreeCommandNames>[] {
+    const { note, selectedNotes, target } = resolved;
+    const singleNote = resolved.selectedOrActiveNoteIds.length <= 1;
+    const openingItems: MenuItem<TreeCommandNames>[] = [
+        { title: t("tree-context-menu.open-in-a-new-tab"), command: "openInTab", shortcut: "Ctrl+Click", uiIcon: "bx bx-link-external", enabled: singleNote },
+        { title: t("tree-context-menu.open-in-a-new-split"), command: "openNoteInSplit", uiIcon: "bx bx-dock-right", enabled: singleNote },
+        { title: t("tree-context-menu.open-in-popup"), command: "openNoteInPopup", uiIcon: "bx bx-edit", enabled: singleNote },
+        { title: t("tree-context-menu.copy-note-path-to-clipboard"), command: "copyNotePathToClipboard", uiIcon: "bx bx-directions", enabled: true }
+    ];
+
+    if (!slice.canWrite()) {
+        return openingItems;
+    }
+
+    // The slice root's own branch joins it to a parent outside the slice, so every entry that moves,
+    // clones, duplicates, deletes or inserts beside it names a note the mask refuses.
+    const isSliceRoot = note.noteId === slice.getSliceRootNoteId();
+    const notSearch = note.type !== "search";
+    const isDesktopTarget = target !== "mobile";
+    const isArchived = selectedNotes.every((n) => n.isArchived);
+    const canToggleArchived = !selectedNotes.some((n) => n.isArchived !== isArchived);
+
+    const advancedItems: MenuItem<TreeCommandNames>[] = [
+        { title: t("tree-context-menu.edit-branch-prefix"), command: "editBranchPrefix", keyboardShortcut: "editBranchPrefix", uiIcon: "bx bx-rename", enabled: !isSliceRoot },
+        { title: t("tree-context-menu.sort-by"), command: "sortChildNotes", keyboardShortcut: "sortChildNotes", uiIcon: "bx bx-sort-down", enabled: singleNote && notSearch }
+    ];
+    if (isDesktopTarget) {
+        advancedItems.push(
+            { kind: "separator" },
+            { title: t("tree-context-menu.expand-subtree"), command: "expandSubtree", keyboardShortcut: "expandSubtree", uiIcon: "bx bx-expand", enabled: singleNote },
+            { title: t("tree-context-menu.collapse-subtree"), command: "collapseSubtree", keyboardShortcut: "collapseSubtree", uiIcon: "bx bx-collapse", enabled: singleNote }
+        );
+    }
+    advancedItems.push(
+        { kind: "separator" },
+        { title: t("tree-context-menu.recent-changes-in-subtree"), command: "recentChangesInSubtree", uiIcon: "bx bx-history", enabled: singleNote }
+    );
+
+    return [
+        ...openingItems,
+
+        { kind: "separator" },
+
+        {
+            title: t("tree-context-menu.insert-note-after"),
+            command: "insertNoteAfter",
+            keyboardShortcut: "createNoteAfter",
+            uiIcon: "bx bx-plus",
+            items: noteTypesService.getBlankNoteTypes("insertNoteAfter"),
+            enabled: !isSliceRoot && singleNote,
+            columns: 2
+        },
+        {
+            title: t("tree-context-menu.insert-child-note"),
+            command: "insertChildNote",
+            keyboardShortcut: "createNoteInto",
+            uiIcon: "bx bx-plus",
+            items: noteTypesService.getBlankNoteTypes("insertChildNote"),
+            enabled: notSearch && singleNote,
+            columns: 2
+        },
+
+        { kind: "separator" },
+
+        { title: t("tree-context-menu.cut"), command: "cutNotesToClipboard", keyboardShortcut: "cutNotesToClipboard", uiIcon: "bx bx-cut", enabled: !isSliceRoot },
+        { title: t("tree-context-menu.copy-clone"), command: "copyNotesToClipboard", keyboardShortcut: "copyNotesToClipboard", uiIcon: "bx bx-copy", enabled: !isSliceRoot },
+        {
+            title: t("tree-context-menu.paste-into"),
+            command: "pasteNotesFromClipboard",
+            keyboardShortcut: "pasteNotesFromClipboard",
+            uiIcon: "bx bx-paste",
+            enabled: !clipboard.isClipboardEmpty() && notSearch && singleNote
+        },
+        {
+            title: t("tree-context-menu.paste-after"),
+            command: "pasteNotesAfterFromClipboard",
+            uiIcon: "bx bx-paste",
+            enabled: !clipboard.isClipboardEmpty() && !isSliceRoot && singleNote
+        },
+        { title: t("tree-context-menu.move-to"), command: "moveNotesTo", keyboardShortcut: "moveNotesTo", uiIcon: "bx bx-transfer", enabled: !isSliceRoot },
+        { title: t("tree-context-menu.clone-to"), command: "cloneNotesTo", keyboardShortcut: "cloneNotesTo", uiIcon: "bx bx-duplicate", enabled: !isSliceRoot },
+        {
+            title: t("tree-context-menu.duplicate"),
+            command: "duplicateSubtree",
+            keyboardShortcut: "duplicateSubtree",
+            uiIcon: "bx bx-outline",
+            enabled: !isSliceRoot && notSearch
+        },
+
+        { kind: "separator" },
+
+        {
+            title: !isArchived ? t("tree-context-menu.archive") : t("tree-context-menu.unarchive"),
+            uiIcon: !isArchived ? "bx bx-archive" : "bx bx-archive-out",
+            enabled: canToggleArchived && singleNote,
+            handler: () => {
+                const [ targetNote ] = selectedNotes;
+                if (!targetNote) {
+                    return;
+                }
+                if (isArchived) {
+                    attributes.removeOwnedLabelByName(targetNote, "archived");
+                } else {
+                    attributes.addLabel(targetNote.noteId, "archived");
+                }
+            }
+        },
+        {
+            title: t("tree-context-menu.delete"),
+            command: "deleteNotes",
+            keyboardShortcut: "deleteNotes",
+            uiIcon: "bx bx-trash destructive-action-icon",
+            enabled: !isSliceRoot
+        },
+
+        { kind: "separator" },
+
+        {
+            title: t("tree-context-menu.advanced"),
+            uiIcon: "bx bxs-wrench",
+            enabled: true,
+            items: advancedItems
+        }
+    ];
 }
 
 /**
