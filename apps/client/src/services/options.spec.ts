@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OptionNames } from "@triliumnext/commons";
 import options from "./options.js";
 import server from "./server.js";
+import slice from "./slice.js";
 
 // Cast helper: the methods are typed against the full OptionNames union, but the
 // behavior under test is purely string-keyed, so any string is a valid stand-in.
@@ -163,6 +164,18 @@ describe("Options service", () => {
         const payload = { a: "1", b: "2" } as unknown as Record<OptionNames, string>;
         await options.saveMany(payload);
         expect(put).toHaveBeenCalledWith("options", payload);
+    });
+
+    it("keeps a slice visitor's options in memory instead of writing the owner's vault", async () => {
+        const put = (server.put = vi.fn(async () => ({})) as typeof server.put);
+        vi.spyOn(slice, "isSlice").mockReturnValue(true);
+
+        await options.save(k("str"), "for this visit");
+        await options.saveMany({ a: "1" } as unknown as Record<OptionNames, string>);
+
+        expect(options.get(k("str"))).toBe("for this visit");
+        expect(options.get(k("a"))).toBe("1");
+        expect(put).not.toHaveBeenCalled();
     });
 
     it("toggle() flips the boolean value and persists the negation", async () => {

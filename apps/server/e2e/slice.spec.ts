@@ -219,6 +219,103 @@ test("a nested, cloned slice does the work of a small vault and nothing outside 
 });
 
 /**
+ * The same slice under the new layout, which this fork's own vault runs.
+ *
+ * The new layout draws the ribbon as a right pane and the floating buttons as a status bar, and
+ * mounts both from components the old layout never renders. Nothing a slice reaches may be refused
+ * there either, so the surfaces that exist only in this layout are opened one by one.
+ */
+test("a slice offers nothing refused under the new layout", async ({ browser, page: ownerPage }) => {
+    // Two vaults' worth of booting: the owner's, to build the fixture and switch the layout, and the
+    // visitor's, which then opens every tab of the right pane one at a time.
+    test.slow();
+    const shape = await buildNestedSlice(ownerPage);
+    await setNewLayout(ownerPage, true);
+
+    const context = await browser.newContext({
+        // Wide enough that the right pane's tab strip is not clipped by the pane's own actions.
+        viewport: { width: 1920, height: 1080 },
+        extraHTTPHeaders: {
+            "x-awm-slice-root": shape.sliceRootNoteId,
+            "x-awm-slice-user": VISITOR,
+            "x-awm-slice-write": "1"
+        }
+    });
+    const page = await context.newPage();
+    const app = new App(page, context);
+
+    const refusals: string[] = [];
+    page.on("response", (response) => {
+        if (response.status() === 403 && new URL(response.url()).origin === new URL(getBaseUrl()).origin) {
+            refusals.push(`${response.request().method()} ${new URL(response.url()).pathname}`);
+        }
+    });
+
+    try {
+        await app.goto();
+        await expect(app.noteTree).toBeVisible();
+        // The status bar and the right pane are what this layout puts in place of the floating buttons
+        // and the ribbon.
+        await expect(page.locator(".status-bar")).toBeVisible();
+
+        // The pane follows the note being read and carries nothing without one.
+        await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.child }).first().click();
+        await expect(app.currentNoteSplitTitle).toHaveValue(shape.titles.child);
+
+        // Every tab in turn, since a tab's widgets are mounted when it is first shown and never before.
+        // The pane boots open, as it does for an owner who left it that way.
+        const tabs = page.locator("#right-pane .tab-strip-tab");
+        const tabCount = await tabs.count();
+        expect(tabCount).toBeGreaterThan(1);
+        for (let index = 0; index < tabCount; index++) {
+            await tabs.nth(index).click();
+            await expect(tabs.nth(index)).toHaveClass(/active/);
+        }
+
+        // The attributes card is the write affordance the ribbon's owned-attributes tab used to be.
+        await tabs.filter({ has: page.locator(".bx-hash") }).click();
+        const attributeCard = page.locator("#right-pane #attributes");
+        await expect(attributeCard).toBeVisible();
+        await expect(attributeCard.locator(".bx-plus").first()).toBeVisible();
+
+        // The status bar's badges, each of which reads something about the note behind a dropdown.
+        const badges = page.locator(".status-bar .actions-row .status-bar-dropdown-button");
+        for (let index = 0; index < await badges.count(); index++) {
+            await badges.nth(index).click();
+            await page.keyboard.press("Escape");
+        }
+
+        // An empty note offers the note-type switcher, which reads the vault's own templates.
+        await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.sliceRoot }).first().click();
+        await app.launcherBar.locator(".bx-file-blank").click();
+        await expect(app.currentNoteSplitTitle).toHaveValue("New note");
+        await expect(app.currentNoteSplit.locator(".note-type-switcher")).toBeVisible();
+        const createdNoteId = page.url().split("/").pop()?.split("?")[0] ?? "";
+
+        expect(refusals.filter((refusal) => !refusal.includes(createdNoteId)),
+            "the new layout offers nothing that is refused").toEqual([]);
+    } finally {
+        await setNewLayout(ownerPage, false);
+        await context.close();
+    }
+});
+
+/**
+ * Turns the new layout on or off for the whole vault, the way its settings pane does, with the right
+ * pane open so a visitor arrives on the surface this test is about.
+ */
+function setNewLayout(page: import("@playwright/test").Page, enabled: boolean) {
+    return page.evaluate(async (enabled) => {
+        const csrfToken = (window as unknown as { glob?: { csrfToken?: string } }).glob?.csrfToken ?? "";
+        await fetch("/api/options", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", "x-csrf-token": csrfToken },
+            body: JSON.stringify({ newLayout: String(enabled), rightPaneVisible: String(enabled) })
+        });
+    }, enabled);
+}
+
+/**
  * `root > outer > middle > sliceRoot`, with `sliceRoot` cloned under `elsewhere` and one of its two
  * children cloned there too — a note the slice holds by one branch and the vault by another.
  */
