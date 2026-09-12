@@ -963,7 +963,7 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
             node = this.getNodesByNoteId(hoistedNoteId)[0];
         }
 
-        const branchIds = slice.isReadOnly()
+        const branchIds = keepsExpandedStateLocal(node.data.noteId)
             ? subtreeBranchIds(node.data.branchId)
             : (await server.put<ExpandedSubtreeResponse>(`branches/${node.data.branchId}/expanded-subtree/${isExpanded ? 1 : 0}`)).branchIds;
 
@@ -1577,8 +1577,7 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 
         branch.isExpanded = isExpanded;
 
-        // The expanded state lives on the branch, so a read-only slice keeps it in froca alone.
-        if (!slice.isReadOnly()) {
+        if (!keepsExpandedStateLocal(branch.noteId)) {
             server.put(`branches/${branchId}/expanded/${isExpanded ? 1 : 0}`);
         }
     }
@@ -1885,9 +1884,18 @@ export default class NoteTreeWidget extends NoteContextAwareWidget {
 }
 
 /**
- * The branch ids at and under `branchId`, read from froca because a read-only slice cannot ask the
- * server to record an expansion. The visited set stops a note cloned under one of its own ancestors
- * from walking forever.
+ * Whether the expanded state of this note's branch stays in froca instead of being recorded on the
+ * server. A read-only link writes nothing at all, and the branch holding the slice root names a
+ * parent outside the slice, which `slice_mask.ts` refuses whatever the link permits.
+ */
+function keepsExpandedStateLocal(noteId: string): boolean {
+    return slice.isReadOnly() || noteId === slice.getSliceRootNoteId();
+}
+
+/**
+ * The branch ids at and under `branchId`, read from froca because a slice that keeps its expanded
+ * state local cannot ask the server for them. The visited set stops a note cloned under one of its
+ * own ancestors from walking forever.
  */
 function subtreeBranchIds(branchId: string): string[] {
     const collected: string[] = [];

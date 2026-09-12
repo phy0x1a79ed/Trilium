@@ -27,18 +27,23 @@ test("a slice shows one subtree, refuses everything outside it, and signs what i
 
     await app.goto();
 
-    // The application paints rooted at the slice, with the affordances that would 403 gone.
+    // The application paints rooted at the slice, with the launcher bar a slice gets of its own.
     await expect(app.noteTree).toBeVisible();
-    await expect(app.launcherBar).toBeHidden();
+    await expect(app.launcherBar.locator("button")).toHaveCount(5);
 
-    // A note outside the slice is refused, and so is a route the mask does not name.
-    for (const path of [ `/api/notes/${outsideNoteId}`, `/api/notes/${insideNoteId}/revisions`,
+    // A note outside the slice is refused, so is a route the mask does not name, and so is asking
+    // for the tree from the vault root.
+    for (const path of [ `/api/notes/${outsideNoteId}`, `/api/attribute-names/?type=label&query=a`,
                          `/api/tree?subTreeNoteId=root` ]) {
         expect(await statusOf(page, path)).toBe(403);
     }
-    expect(await statusOf(page, `/api/notes/${insideNoteId}/title`, "PUT")).toBe(403);
+    // Deleting a note deletes every clone of it, wherever in the vault they live.
+    expect(await statusOf(page, `/api/notes/${insideNoteId}`, "DELETE")).toBe(403);
 
-    // A body write is the one thing a slice may do, and it arrives sanitised and signed.
+    // Its own history a writable link reads.
+    expect(await statusOf(page, `/api/notes/${insideNoteId}/revisions`)).toBe(200);
+
+    // A body write arrives sanitised and signed.
     const written = await statusOf(page, `/api/notes/${insideNoteId}/data`, "PUT",
         { content: "<p>written by a visitor</p><script>alert(1)</script>" });
     // The handler returns nothing, which the API's result handler answers with 204.
@@ -91,7 +96,7 @@ function statusOf(page: import("@playwright/test").Page, path: string, method = 
  * cloned child of its own. A slice whose note is a direct child of `root` renders correctly whatever
  * the tree route sends, which is why a leak of the whole vault went unseen.
  */
-test("a nested, cloned slice shows its own subtree and offers nothing it cannot do", async ({ browser, page: ownerPage }) => {
+test("a nested, cloned slice does the work of a small vault and nothing outside itself", async ({ browser, page: ownerPage }) => {
     const shape = await buildNestedSlice(ownerPage);
 
     const context = await browser.newContext({
@@ -104,7 +109,8 @@ test("a nested, cloned slice shows its own subtree and offers nothing it cannot 
     const page = await context.newPage();
     const app = new App(page, context);
 
-    // Nothing a slice reaches is refused, which is the whole of the philosophy in one assertion.
+    // Nothing a slice reaches is refused, which is the whole of the philosophy in one assertion. The
+    // deliberate probes at the end of this test are made after it is asserted.
     const refusals: string[] = [];
     page.on("response", (response) => {
         if (response.status() === 403 && new URL(response.url()).origin === new URL(getBaseUrl()).origin) {
@@ -122,9 +128,16 @@ test("a nested, cloned slice shows its own subtree and offers nothing it cannot 
         await expect(page.locator(".tree-wrapper .fancytree-title", { hasText: absent })).toHaveCount(0);
     }
 
-    // Every affordance a slice cannot act on is absent rather than disabled.
-    for (const selector of [ ".add-note-button", ".unhoist-button", ".enter-workspace-button",
-                             ".tree-settings-button", ".ribbon-button-container" ]) {
+    // The five launchers a slice carries, and none of the owner's.
+    for (const icon of [ "bx-file-blank", "bx-search", "bx-send", "bxs-network-chart", "bx-history" ]) {
+        await expect(app.launcherBar.locator(`.${icon}`)).toHaveCount(1);
+    }
+    for (const icon of [ "bx-cog", "bx-link", "bx-calendar", "bx-bookmark" ]) {
+        await expect(app.launcherBar.locator(`.${icon}`)).toHaveCount(0);
+    }
+
+    // Hoisting is what a slice still offers nothing for: unhoisting would put the vault on screen.
+    for (const selector of [ ".unhoist-button", ".enter-workspace-button", ".tree-settings-button" ]) {
         await expect(page.locator(selector)).toHaveCount(0);
     }
 
@@ -134,21 +147,46 @@ test("a nested, cloned slice shows its own subtree and offers nothing it cannot 
         await expect(app.currentNoteSplitTitle).toHaveValue(title);
     }
 
-    // Four entries, by equality: open in new tab, open in new split, open in popup, copy note path.
+    // The tree context menu a writable link gets: the edits it can make, and nothing that would name
+    // a note outside the slice or reach a route the mask refuses.
     await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.child })
         .first().click({ button: "right" });
-    await expect(page.locator("#context-menu-container .dropdown-item")).toHaveCount(4);
+    const menuItems = page.locator("#context-menu-container .dropdown-item");
+    for (const offered of [ "Insert child note", "Cut", "Move to...", "Delete" ]) {
+        await expect(menuItems.filter({ hasText: offered })).toHaveCount(1);
+    }
+    for (const absent of [ "Import into note", "Export", "Protect subtree" ]) {
+        await expect(menuItems.filter({ hasText: absent })).toHaveCount(0);
+    }
+    await page.keyboard.press("Escape");
+
+    // Creating, naming and deleting, driven the way a visitor drives them.
+    await page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.sliceRoot }).first().click();
+    await app.launcherBar.locator(".bx-file-blank").click();
+    // The note the launcher just created, which the split switches to, is what gets the name below.
+    await expect(app.currentNoteSplitTitle).toHaveValue("New note");
+    await app.currentNoteSplitTitle.fill(shape.titles.created);
+    await app.currentNoteSplitTitle.blur();
+    const createdRow = page.locator(".tree-wrapper .fancytree-title", { hasText: shape.titles.created });
+    await expect(createdRow).toHaveCount(1);
+    // The address bar names the note path of whatever is open, which the note just made now is, with
+    // the tab and the hoisted note after it as query parameters.
+    const createdNoteId = page.url().split("/").pop()?.split("?")[0] ?? "";
+
+    await createdRow.first().click({ button: "right" });
+    await menuItems.filter({ hasText: "Delete" }).click();
+    await page.locator(".modal.delete-notes-dialog .btn-primary").click();
+    await expect(createdRow).toHaveCount(0);
 
     // A new tab searches the slice. Every title carries the same stamp, so one query reaches the
     // whole fixture and only the boundary decides what comes back: the slice root and its two
-    // children, with no row for creating a note or opening a search note.
+    // children, with the row that creates a note at the head of them.
     await app.addNewTab();
     const searchBox = app.currentNoteSplit.locator(".note-autocomplete");
     await searchBox.click();
     await searchBox.pressSequentially(shape.stamp);
 
     const suggestions = app.currentNoteSplit.locator(".note-detail-empty-results .aa-suggestion");
-    await expect(suggestions).toHaveCount(3);
     await expect(suggestions.filter({ hasText: shape.titles.child })).toHaveCount(1);
     for (const absent of [ shape.titles.outer, shape.titles.middle, shape.titles.elsewhere ]) {
         await expect(suggestions.filter({ hasText: absent })).toHaveCount(0);
@@ -157,7 +195,25 @@ test("a nested, cloned slice shows its own subtree and offers nothing it cannot 
     // The workspace switcher searches the whole vault, so the empty tab leaves it out.
     await expect(page.locator(".workspace-notes .workspace-note")).toHaveCount(0);
 
-    expect(refusals, "a slice offers nothing that is refused").toEqual([]);
+    // A note that has just been deleted is outside every slice, so a request the browser had already
+    // started for it is refused on its way back. Nothing an affordance leads to may be.
+    expect(refusals.filter((refusal) => !refusal.includes(createdNoteId)),
+        "a slice offers nothing that is refused").toEqual([]);
+
+    // What the boundary refuses, asked for the way the client would ask. Every one of these is a
+    // write the client offers nowhere, which is why they are probed rather than clicked.
+    const outside = shape.elsewhereNoteId;
+    expect(await statusOf(page, `/api/notes/${shape.childNoteId}`, "DELETE")).toBe(403);
+    expect(await statusOf(page, "/api/delete-notes-preview", "POST",
+        { branchIdsToDelete: [ shape.childBranchId ] })).toBe(403);
+    expect(await statusOf(page, `/api/branches/${shape.childBranchId}?eraseNotes=true`, "DELETE")).toBe(403);
+    expect(await statusOf(page,
+        `/api/branches/${shape.childBranchId}/move-to/${shape.elsewhereBranchId}`, "PUT")).toBe(403);
+    expect(await statusOf(page, `/api/notes/${shape.childNoteId}/clone-to-note/${outside}`, "PUT")).toBe(403);
+    expect(await statusOf(page, `/api/notes/${shape.sliceRootNoteId}/children?target=into`, "POST",
+        { title: "from a template outside", content: "", type: "text", templateNoteId: outside })).toBe(403);
+    expect(await statusOf(page, `/api/notes/${shape.childNoteId}/attributes`, "POST",
+        { type: "relation", name: "runOnNoteChange", value: shape.childNoteId })).toBe(403);
 
     await context.close();
 });
@@ -177,17 +233,18 @@ async function buildNestedSlice(page: import("@playwright/test").Page) {
         sliceRoot: `slice root ${stamp}`,
         child: `slice child ${stamp}`,
         clonedChild: `slice cloned child ${stamp}`,
-        elsewhere: `slice elsewhere ${stamp}`
+        elsewhere: `slice elsewhere ${stamp}`,
+        created: `slice made ${stamp}`
     };
 
-    const sliceRootNoteId = await page.evaluate(async (titles) => {
+    const ids = await page.evaluate(async (titles) => {
         const csrfToken = (window as unknown as { glob?: { csrfToken?: string } }).glob?.csrfToken ?? "";
         const headers = { "Content-Type": "application/json", "x-csrf-token": csrfToken };
         const create = async (parentNoteId: string, title: string, type = "text") => {
             const created = await (await fetch(`/api/notes/${parentNoteId}/children?target=into`, {
                 method: "POST", headers, body: JSON.stringify({ title, type, content: "<p>body</p>" })
             })).json();
-            return created.note.noteId as string;
+            return { noteId: created.note.noteId as string, branchId: created.branch.branchId as string };
         };
         const cloneTo = (noteId: string, parentNoteId: string) =>
             fetch(`/api/notes/${noteId}/clone-to-note/${parentNoteId}`, {
@@ -195,20 +252,26 @@ async function buildNestedSlice(page: import("@playwright/test").Page) {
             });
 
         const outer = await create("root", titles.outer);
-        const middle = await create(outer, titles.middle);
-        const sliceRoot = await create(middle, titles.sliceRoot);
-        await create(sliceRoot, titles.child);
+        const middle = await create(outer.noteId, titles.middle);
+        const sliceRoot = await create(middle.noteId, titles.sliceRoot);
+        const child = await create(sliceRoot.noteId, titles.child);
         // A code note, to pin that a writable slice is not limited to prose.
-        const clonedChild = await create(sliceRoot, titles.clonedChild, "code");
+        const clonedChild = await create(sliceRoot.noteId, titles.clonedChild, "code");
         const elsewhere = await create("root", titles.elsewhere);
 
-        await cloneTo(sliceRoot, elsewhere);
-        await cloneTo(clonedChild, elsewhere);
+        await cloneTo(sliceRoot.noteId, elsewhere.noteId);
+        await cloneTo(clonedChild.noteId, elsewhere.noteId);
 
-        return sliceRoot;
+        return {
+            sliceRootNoteId: sliceRoot.noteId,
+            childNoteId: child.noteId,
+            childBranchId: child.branchId,
+            elsewhereNoteId: elsewhere.noteId,
+            elsewhereBranchId: elsewhere.branchId
+        };
     }, titles);
 
-    return { sliceRootNoteId, titles, stamp: String(stamp) };
+    return { ...ids, titles, stamp: String(stamp) };
 }
 
 /**

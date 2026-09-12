@@ -169,11 +169,10 @@ export default class WebSocketMessagingProvider implements HttpAttachableMessagi
 
 /**
  * The note ids that decide whether an entity change belongs to a slice, keyed by
- * `entityChange.entityName`. Every id returned must be inside the slice, so a branch is judged by
- * both of its ends: `froca_updater` attaches the parent named by a branch change, and one whose
- * parent lives elsewhere in the vault would graft that parent onto the visitor's tree. An entity
- * type absent here names no note at all, so a slice connection is never told about it — the same
- * fail-closed rule `slice_mask.ts` applies to routes.
+ * `entityChange.entityName`. Every id returned must be inside the slice, so a branch is judged by the
+ * parent it names: `froca_updater` attaches that parent, and one living elsewhere in the vault would
+ * graft it onto the visitor's tree. An entity type absent here names no note at all, so a slice
+ * connection is never told about it — the same fail-closed rule `slice_mask.ts` applies to routes.
  */
 function noteIdsForSliceCheck(entityChange: EntityChange): string[] | null {
     switch (entityChange.entityName) {
@@ -185,8 +184,12 @@ function noteIdsForSliceCheck(entityChange: EntityChange): string[] | null {
         case "revisions":
             return entityChange.noteId ? [ entityChange.noteId ] : null;
         case "branches": {
-            const branch = entityChange.entity as { noteId?: string; parentNoteId?: string } | undefined;
-            return branch?.noteId && branch?.parentNoteId ? [ branch.noteId, branch.parentNoteId ] : null;
+            // Judged by the parent alone. A note held by a parent inside the slice is inside the slice
+            // too, so the child id adds nothing while the branch lives; and a branch just deleted has
+            // left becca along with its note, which `isNoteInSlice` could no longer place. Checking
+            // both ends there would drop the one message that tells the visitor's tree to lose the row.
+            const parentNoteId = (entityChange.entity as { parentNoteId?: string } | undefined)?.parentNoteId;
+            return parentNoteId ? [ parentNoteId ] : null;
         }
         case "attributes": {
             const noteId = (entityChange.entity as { noteId?: string } | undefined)?.noteId;
