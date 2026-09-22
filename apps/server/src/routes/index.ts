@@ -5,7 +5,7 @@ import type { Request, Response } from "express";
 import packageJson from "../../package.json" with { type: "json" };
 import appPath from "../services/app_path.js";
 import { isAvailable as isSliceSharingAvailable } from "../services/awm_gateway.js";
-import assetPath from "../services/asset_path.js";
+import assetPath, { getTranslationsVersion } from "../services/asset_path.js";
 import config from "../services/config.js";
 import { getLog } from "@triliumnext/core";
 import { isInternalElectronRequest } from "../services/electron_request.js";
@@ -65,6 +65,7 @@ export function bootstrap(req: Request, res: Response) {
         setupSecondFactorRequired: sharedItems.setupSecondFactorRequired && !isElectronRenderer && !noAuthentication,
         baseApiUrl: "api/",
         appPath,
+        translationsVersion: getTranslationsVersion(),
         isStandalone: false,
         // Reflects whether *this client* is the trusted desktop renderer, not whether
         // the server is a desktop build: a browser hitting the desktop's HTTP listener

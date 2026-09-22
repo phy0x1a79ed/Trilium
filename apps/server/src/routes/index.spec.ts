@@ -15,7 +15,7 @@ vi.mock("../services/utils.js", async (orig) => {
 vi.mock("../services/config.js", () => ({ default: { General: {}, Network: {} } }));
 vi.mock("../services/port.js", () => ({ default: 8080 }));
 vi.mock("../services/app_path.js", () => ({ default: "app" }));
-vi.mock("../services/asset_path.js", () => ({ default: "assets" }));
+vi.mock("../services/asset_path.js", () => ({ default: "assets", getTranslationsVersion: () => "0123456789ab" }));
 vi.mock("./csrf_protection.js", () => ({ generateCsrfToken: () => "csrf-test-token" }));
 vi.mock("../services/open_id.js", () => ({
     default: { isOpenIDEnabled: () => false, getSSOIssuerName: () => "", getSSOIssuerIcon: () => "" }
@@ -115,6 +115,15 @@ describe("bootstrap auth gating (desktop build, #10589)", () => {
         // absolute renderer-only URLs it can't derive from trilium-app://.
         expect(body().isElectron).toBe(true);
         expect(body().wsBaseUrl).toBeTruthy();
+    });
+});
+
+describe("bootstrap translations", () => {
+    it("names the catalogue version the client puts on the translation URLs", () => {
+        const { res, body } = makeRes();
+        bootstrap(makeReq({ loggedIn: true }), res);
+
+        expect(body().translationsVersion).toBe("0123456789ab");
     });
 });
 

@@ -37,7 +37,8 @@ export async function initLocale(locale: LOCALE_IDS = "en", scope: "app" | "entr
         // `t("login.password")` without having to know which of the two holds it.
         fallbackNS: ENTRY_NAMESPACE,
         backend: {
-            loadPath: `${window.glob.assetPath}/translations/{{lng}}/{{ns}}.json`
+            loadPath: `${window.glob.assetPath}/translations/{{lng}}/{{ns}}.json`,
+            queryStringParams: window.glob.translationsVersion ? { v: window.glob.translationsVersion } : {}
         },
         returnEmptyString: false
     });
