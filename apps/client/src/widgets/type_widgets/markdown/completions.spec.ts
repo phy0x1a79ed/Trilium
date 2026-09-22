@@ -2,11 +2,25 @@ import type { CompletionContext } from "@codemirror/autocomplete";
 import { markdown } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
+import VanillaCodeMirror from "@triliumnext/codemirror";
 import type { MimeType } from "@triliumnext/commons";
+import { h, render } from "preact";
+import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../../../services/search.js", () => ({
+    default: { searchForNotes: vi.fn().mockResolvedValue([]) }
+}));
+vi.mock("../../../services/task_states.js", () => ({
+    getTaskStateDefinitions: vi.fn().mockResolvedValue([])
+}));
+
+import Component from "../../../components/component.js";
 import mime_types from "../../../services/mime_types.js";
-import { buildCodeFenceOptions, buildTaskItemInsert, codeFenceCompletionSource, isClosingFence, parseCodeFencePrefix } from "./completions.js";
+import { buildNote } from "../../../test/easy-froca.js";
+import { ParentComponent } from "../../react/react_utils.js";
+import { useSnippetSlashCommands } from "../code/snippets.js";
+import { buildCodeFenceOptions, buildTaskItemInsert, codeFenceCompletionSource, isClosingFence, parseCodeFencePrefix, useSlashCommands } from "./completions.js";
 
 describe("buildTaskItemInsert", () => {
     it("prepends a bullet when not already in a list item", () => {
@@ -135,5 +149,33 @@ describe("codeFenceCompletionSource", () => {
     it("returns null on a valid opener when no languages are enabled", () => {
         withLanguages(); // none enabled → no options
         expect(codeFenceCompletionSource(context("```", 3))).toBeNull();
+    });
+});
+
+describe("useSlashCommands", () => {
+    it("shares the editor's autocompletion with the snippet source a type change registers", () => {
+        const container = document.createElement("div");
+        document.body.appendChild(container);
+        const editor = new VanillaCodeMirror({ parent: container });
+        const note = buildNote({ title: "Was markdown", type: "canvas" });
+        const parentComponent = new Component();
+
+        // A type change re-renders the markdown widget with a note that is no longer markdown, so
+        // `Code.tsx` enables its snippet source on the editor the slash commands already use.
+        function Probe() {
+            useSlashCommands(parentComponent, editor, note);
+            useSnippetSlashCommands(editor, () => false, "application/json", true, note.noteId);
+            return null;
+        }
+
+        expect(() => act(() => render(
+            h(ParentComponent.Provider, { value: parentComponent }, h(Probe, {})),
+            container
+        ))).not.toThrow();
+        expect(() => editor.setCompletionSource("typescript", null)).not.toThrow();
+
+        act(() => render(null, container));
+        editor.destroy();
+        container.remove();
     });
 });
