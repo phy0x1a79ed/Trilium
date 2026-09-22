@@ -9,12 +9,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 // backend would try to fetch translation JSON over HTTP and the awaited init()
 // would hang until the connection fails. Our fake backend resolves read()
 // synchronously with an empty resource bundle.
+const backendOptions = vi.hoisted(() => ({ last: undefined as unknown }));
 vi.mock("i18next-http-backend", () => {
     class FakeBackend {
         static type = "backend" as const;
         type = "backend" as const;
-        init() {
-            // No configuration needed.
+        init(_services: unknown, options: unknown) {
+            backendOptions.last = options;
         }
         read(_language: string, _namespace: string, callback: (err: unknown, data: unknown) => void) {
             callback(null, {});
@@ -386,6 +387,16 @@ describe("i18n", () => {
             expect(dayjs.locale()).toBe("de");
             // The deferred resolves once translations are ready.
             await expect(translationsInitializedPromise).resolves.toBeUndefined();
+        });
+
+        it("puts the server's catalogue version on the translation URLs when it names one", async () => {
+            (window as any).glob = { ...(window as any).glob, assetPath: "/assets", translationsVersion: "0123456789ab" };
+            await initLocale("en");
+            expect(backendOptions.last).toMatchObject({ queryStringParams: { v: "0123456789ab" } });
+
+            (window as any).glob = { ...(window as any).glob, translationsVersion: undefined };
+            await initLocale("en");
+            expect(backendOptions.last).toMatchObject({ queryStringParams: {} });
         });
 
         it("uses the default 'en' locale when called without arguments", async () => {

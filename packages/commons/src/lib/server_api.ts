@@ -955,6 +955,8 @@ export type BootstrapDefinition = {
     };
     baseApiUrl: string;
     assetPath: string;
+    /** Appended to the translation catalogue URLs so a rebuilt catalogue is fetched again. */
+    translationsVersion?: string;
     theme: string;
     themeBase?: "next" | "next-light" | "next-dark";
     customThemeCssUrl?: string;
