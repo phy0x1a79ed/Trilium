@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import FBranch from "../../../entities/fbranch";
 import froca from "../../../services/froca";
 import { buildNote } from "../../../test/easy-froca";
-import { getBoardData } from "./data";
+import { getBoardData, getFolderBoardData } from "./data";
 
 describe("Board data", () => {
     it("deduplicates cloned notes", async () => {
@@ -79,5 +79,51 @@ describe("Board data", () => {
         // note actually carries) is the first key, and the columns nothing carries follow in the
         // order resolveBoardColumns settled on.
         expect([ ...data.byColumn.keys() ]).toEqual([ "Blocked", "To Do", "Done" ]);
+    });
+});
+
+describe("Folder board data", () => {
+    it("makes each child note a column and its own children the cards, in tree order", async () => {
+        const board = buildNote({
+            title: "Tasks",
+            children: [
+                { id: "planned", title: "Planned", children: [
+                    { id: "task1", title: "Write spec", children: [ { title: "Subtask" } ] },
+                    { id: "task2", title: "Old task", "#archived": "" }
+                ] },
+                { id: "empty", title: "Empty" },
+                { id: "shelved", title: "Shelved", "#archived": "", children: [ { title: "Hidden" } ] },
+                { id: "saved", title: "Search", type: "search" },
+                { id: "done", title: "Done", children: [ { id: "task3", title: "Shipped" } ] }
+            ]
+        });
+
+        const data = await getFolderBoardData(board, false);
+
+        expect(data.columns).toEqual([ "planned", "empty", "done" ]);
+        expect([ ...data.byColumn.entries() ].map(([ column, cards ]) => [
+            column, cards.map(card => [ card.note.noteId, card.branch.parentNoteId, card.path ])
+        ])).toEqual([
+            [ "planned", [ [ "task1", "planned", "" ] ] ],
+            [ "empty", [] ],
+            [ "done", [ [ "task3", "done", "" ] ] ]
+        ]);
+        expect(data.folderBranches.get("done")?.branchId).toBe(`${board.noteId}_done`);
+    });
+
+    it("keeps archived folders and cards when the board includes archived notes", async () => {
+        const board = buildNote({
+            title: "Tasks",
+            children: [
+                { id: "archFolder", title: "Shelved", "#archived": "", children: [
+                    { id: "archCard", title: "Old", "#archived": "" }
+                ] }
+            ]
+        });
+
+        const data = await getFolderBoardData(board, true);
+
+        expect(data.columns).toEqual([ "archFolder" ]);
+        expect(data.byColumn.get("archFolder")?.map(card => card.note.noteId)).toEqual([ "archCard" ]);
     });
 });

@@ -149,6 +149,7 @@ export const ATTR_HELP: AttrHelpMap = {
         oneNoteImportFailed: t("attribute_detail.one_note_import_failed"),
         status: t("attribute_detail.status"),
         "board:groupBy": t("attribute_detail.board_group_by"),
+        "board:columnsFrom": t("attribute_detail.board_columns_from"),
         stateId: t("attribute_detail.state_id"),
         markdownSymbol: t("attribute_detail.markdown_symbol"),
         isCompleted: t("attribute_detail.is_completed"),

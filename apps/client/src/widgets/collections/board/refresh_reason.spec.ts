@@ -53,6 +53,20 @@ describe("findRefreshReason", () => {
         expect(reasonFor({ attributes: [ [ STATUS, "cardA" ] ], branches: [ "cardA" ] }))
             .toBe("status-attribute");
     });
+
+    it("redraws a folder board for a folder's own note row and for a child added to the board", () => {
+        const folders = [ "planned", "done" ];
+
+        // A rename of a column folder, which is the column header.
+        expect(reasonFor({ notes: [ "planned" ], folders })).toBe("column-folder");
+        expect(reasonFor({ attributes: [ [ "archived", "done" ] ], folders })).toBe("column-folder");
+        // A new folder, whose note is not yet among the board's notes.
+        expect(reasonFor({ branches: [ { noteId: "blocked", parentNoteId: BOARD_ID } ], folders }))
+            .toBe("column-folder");
+        // A card's content edit is still not a reason, and a label board never looks at folders.
+        expect(reasonFor({ notes: [ "cardA" ], folders })).toBeNull();
+        expect(reasonFor({ notes: [ "planned" ] })).toBeNull();
+    });
 });
 
 /**
@@ -62,19 +76,22 @@ describe("findRefreshReason", () => {
  * `getBranchRows()` merge a tracked row with the entity behind it and drop rows missing either half.
  * The entity goes in through the constructor, the row through `add*()`.
  */
-function reasonFor({ notes = [], attributes = [], branches = [] }: {
+function reasonFor({ notes = [], attributes = [], branches = [], folders }: {
     notes?: string[];
     /** `[ name, noteId ]` pairs. */
     attributes?: [ string, string ][];
-    /** The note each changed branch points at. */
-    branches?: string[];
+    /** The note each changed branch points at, and optionally its parent. */
+    branches?: (string | { noteId: string; parentNoteId: string })[];
+    /** The column folders of a folder board. */
+    folders?: string[];
 }) {
     const changes: EntityChange[] = [
         ...attributes.map(([ name, noteId ], index) => entityChange("attributes", `attr${index}`, {
             attributeId: `attr${index}`, name, noteId
         })),
-        ...branches.map((noteId, index) => entityChange("branches", `branch${index}`, {
-            branchId: `branch${index}`, noteId
+        ...branches.map((branch, index) => entityChange("branches", `branch${index}`, {
+            branchId: `branch${index}`,
+            ...(typeof branch === "string" ? { noteId: branch } : branch)
         }))
     ];
 
@@ -83,7 +100,7 @@ function reasonFor({ notes = [], attributes = [], branches = [] }: {
     attributes.forEach((_, index) => results.addAttribute(`attr${index}`, COMPONENT_ID));
     branches.forEach((_, index) => results.addBranch(`branch${index}`, COMPONENT_ID));
 
-    return findRefreshReason(results, STATUS, CARDS, BOARD_ID);
+    return findRefreshReason(results, STATUS, CARDS, BOARD_ID, folders);
 }
 
 function entityChange(entityName: EntityType, entityId: string, entity: object): EntityChange {

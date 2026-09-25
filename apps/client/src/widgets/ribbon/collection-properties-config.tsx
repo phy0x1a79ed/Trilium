@@ -3,6 +3,7 @@ import { t } from "i18next";
 import Component from "../../components/component";
 import FNote from "../../entities/fnote";
 import attributes from "../../services/attributes";
+import { DEFAULT_COLUMNS_FROM } from "../collections/board/columns";
 import { DEFAULT_MAP_LAYER_NAME, MAP_LAYERS, type MapLayer } from "../collections/geomap/map_layer";
 import { ViewTypeOptions } from "../collections/interface";
 import { DEFAULT_THEME, getPresentationThemes } from "../collections/presentation/themes";
@@ -148,7 +149,19 @@ export const bookPropertiesConfig: Record<ViewTypeOptions, BookConfig> = {
         ]
     },
     board: {
-        properties: []
+        properties: [
+            {
+                label: t("book_properties_config.board-columns-from"),
+                icon: "bx bx-columns",
+                type: "combobox",
+                bindToLabel: "board:columnsFrom",
+                defaultValue: DEFAULT_COLUMNS_FROM,
+                options: [
+                    { value: "label", label: t("book_properties_config.board-columns-from-label") },
+                    { value: "folders", label: t("book_properties_config.board-columns-from-folders") }
+                ]
+            }
+        ]
     },
     presentation: {
         properties: [

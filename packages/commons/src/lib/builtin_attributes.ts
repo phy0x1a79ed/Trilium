@@ -259,6 +259,7 @@ const BUILTIN_ATTRIBUTES = [
     // Collections
     { type: "label", name: "status", valueType: "text", hasUserValue: true },
     { type: "label", name: "board:groupBy", valueType: "text", hasUserValue: true },
+    { type: "label", name: "board:columnsFrom", valueType: "select", hasUserValue: true, selectOptions: [ "label", "folders" ] },
     // Carried by the task-state definition notes under `_taskStates`, which back the board columns.
     { type: "label", name: "stateId", valueType: "text", hasUserValue: true },
     { type: "label", name: "markdownSymbol", valueType: "text" },

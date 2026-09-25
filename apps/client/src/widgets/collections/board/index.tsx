@@ -3,6 +3,7 @@ import "./index.css";
 import { createContext, TargetedKeyboardEvent } from "preact";
 import { Dispatch, StateUpdater, useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 
+import type FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import { t } from "../../../services/i18n";
 import type LoadResults from "../../../services/load_results";
@@ -18,9 +19,9 @@ import { onWheelHorizontalScroll } from "../../widget_utils";
 import { ViewModeProps } from "../interface";
 import Api from "./api";
 import BoardApi from "./api";
-import { DEFAULT_GROUP_BY, getStatusDefinition } from "./columns";
+import { DEFAULT_COLUMNS_FROM, DEFAULT_GROUP_BY, getStatusDefinition } from "./columns";
 import Column from "./column";
-import { ColumnMap, getBoardData } from "./data";
+import { ColumnMap, getBoardData, getFolderBoardData } from "./data";
 
 export interface BoardViewData {
     columns?: BoardColumnData[];
@@ -96,6 +97,9 @@ export const BoardDragStateContext = createContext<BoardDragState>({
 export default function BoardView({ note: parentNote, noteIds, viewConfig, saveConfig }: ViewModeProps<BoardViewData>) {
     const [ statusAttributeWithPrefix ] = useNoteLabelWithDefault(parentNote, "board:groupBy", DEFAULT_GROUP_BY);
     const [ includeArchived ] = useNoteLabelBoolean(parentNote, "includeArchived");
+    const [ columnsFrom ] = useNoteLabelWithDefault(parentNote, "board:columnsFrom", DEFAULT_COLUMNS_FROM);
+    const isFolderMode = columnsFrom === "folders";
+    const [ folderBranches, setFolderBranches ] = useState<Map<string, FBranch>>();
     const [ byColumn, setByColumn ] = useState<ColumnMap>();
     const [ columns, setColumns ] = useState<string[]>();
     const [ isInRelationMode, setIsRelationMode ] = useState(false);
@@ -118,8 +122,13 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
      */
     const hasSeededDefinitionRef = useRef(false);
     const api = useMemo(() => {
-        return new Api(byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig, setBranchIdToEdit, statusDefinition);
-    }, [ byColumn, columns, parentNote, statusAttributeWithPrefix, viewConfig, saveConfig, setBranchIdToEdit, statusDefinition ]);
+        return new Api(
+            byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig,
+            setBranchIdToEdit, statusDefinition, isFolderMode ? (folderBranches ?? new Map()) : undefined);
+    }, [
+        byColumn, columns, parentNote, statusAttributeWithPrefix, viewConfig, saveConfig,
+        setBranchIdToEdit, statusDefinition, isFolderMode, folderBranches
+    ]);
     // Every member is one of useState's own setters, so this value is built once and never changes
     // identity -- a drag cannot reach anything that reads only this.
     const boardActions = useMemo<BoardActions>(() => ({
@@ -144,6 +153,17 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     }), [ branchIdToEdit, columnNameToEdit, draggedCard, draggedColumn, dropPosition, dropTarget ]);
 
     function refresh() {
+        if (isFolderMode) {
+            getFolderBoardData(parentNote, includeArchived)
+                .then(({ byColumn, columns, folderBranches }) => {
+                    setByColumn(byColumn);
+                    setIsRelationMode(false);
+                    setColumns(columns);
+                    setFolderBranches(folderBranches);
+                });
+            return;
+        }
+
         getBoardData(parentNote, statusAttributeWithPrefix, viewConfig ?? {}, includeArchived, statusDefinition?.options ?? [])
             .then(({ byColumn, columns, isInRelationMode }) => {
                 setByColumn(byColumn);
@@ -162,7 +182,9 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             });
     }
 
-    useEffect(refresh, [ parentNote, noteIds, viewConfig, statusAttributeWithPrefix, statusDefinition ]);
+    useEffect(refresh, [
+        parentNote, noteIds, viewConfig, statusAttributeWithPrefix, statusDefinition, isFolderMode, includeArchived
+    ]);
 
     const handleColumnDrop = useCallback((fromIndex: number, toIndex: number) => {
         const newColumns = api.reorderColumn(fromIndex, toIndex);
@@ -181,7 +203,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
             setDefinitionRevision(revision => revision + 1);
         }
 
-        if (findRefreshReason(loadResults, api.statusAttribute, noteIds, parentNote.noteId)) {
+        const folderNoteIds = isFolderMode ? (columns ?? []) : undefined;
+        if (findRefreshReason(loadResults, api.statusAttribute, noteIds, parentNote.noteId, folderNoteIds)) {
             refresh();
         }
     });
@@ -257,16 +280,34 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
 /**
  * Names the first change in `loadResults` that the board has to redraw for, or null if none does.
  *
- * A plain note-row change is deliberately not one of them. `getNoteIds()` reports every note in the
- * change set whatever changed about it, so it cannot distinguish a card's title from its content,
- * which no card displays. Cards keep their own title and icon in step instead, and nothing else the
- * board derives comes off the note row: membership is branches, grouping is the status attribute,
- * and `#archived` is a label.
+ * A plain note-row change is deliberately not one of them, except on a column folder in folder mode,
+ * whose title is the column header. `getNoteIds()` reports every note in the change set whatever
+ * changed about it, so it cannot distinguish a card's title from its content, which no card
+ * displays. Cards keep their own title and icon in step instead, and nothing else the board derives
+ * comes off the note row: membership is branches, grouping is the status attribute or the parent
+ * folder, and `#archived` is a label.
  *
  * Naming the winning check, rather than returning a boolean, is what lets the profiler attribute a
  * redraw to a cause.
+ *
+ * @param folderNoteIds the column folders of a board in folder mode, `undefined` in label mode.
  */
-export function findRefreshReason(loadResults: LoadResults, statusAttribute: string, noteIds: string[], parentNoteId: string): string | null {
+export function findRefreshReason(
+    loadResults: LoadResults,
+    statusAttribute: string,
+    noteIds: string[],
+    parentNoteId: string,
+    folderNoteIds?: string[]
+): string | null {
+    if (folderNoteIds) {
+        // A column folder renamed or archived, or a child of the board added, removed or reordered.
+        if (loadResults.getNoteIds().some(noteId => folderNoteIds.includes(noteId))
+            || loadResults.getAttributeRows().some(attr => attr.name === "archived" && folderNoteIds.includes(attr.noteId ?? ""))
+            || loadResults.getBranchRows().some(branch => branch.parentNoteId === parentNoteId)) {
+            return "column-folder";
+        }
+    }
+
     // A card moved between columns.
     if (loadResults.getAttributeRows().some(attr => attr.name === statusAttribute && noteIds.includes(attr.noteId ?? ""))) {
         return "status-attribute";
