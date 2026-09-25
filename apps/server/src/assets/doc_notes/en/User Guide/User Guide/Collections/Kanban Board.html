@@ -183,3 +183,26 @@
       easy status change within the note:</p><pre><code class="language-text-x-trilium-auto">#relation:status(inheritable)="promoted,alias=Status,single"</code></pre>
   </li>
 </ol>
+<h3>Columns from folders</h3>
+<p>A board can take its columns from its child notes instead of from a label.
+  To turn this on, open the board's properties menu and set <em>Columns from</em> to
+  <em>Folders</em>, or set <code spellcheck="false">#board:columnsFrom=folders</code> on
+  the board.</p>
+<p>In this mode:</p>
+<ul>
+  <li>Each direct child note of the board is a column, titled by that note and
+    in the order of the note tree.</li>
+  <li>The cards of a column are the direct children of its note. A card's own
+    children stay inside the card.</li>
+  <li>A note is in exactly one column, since it sits in exactly one folder.</li>
+  <li>Dragging a card to another column, or using <em>Move to</em>, moves the
+    note into that folder.</li>
+  <li><em>New item</em> and <em>Insert above/below</em> create the note inside
+    the column's folder.</li>
+  <li>Adding, renaming, reordering or deleting a column does the same to its
+    note. Deleting a column opens the usual delete notes dialog.</li>
+  <li>Changes made in the note tree, such as renaming a folder or moving a note
+    between folders, show on the board straight away.</li>
+  <li><em>Remove from board</em> is not offered, since a note leaves the board
+    only by leaving its folder.</li>
+</ul>

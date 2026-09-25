@@ -126,3 +126,18 @@ To do so:
     ```
     #relation:status(inheritable)="promoted,alias=Status,single"
     ```
+
+### Columns from folders
+
+A board can take its columns from its child notes instead of from a label. To turn this on, open the board's properties menu and set _Columns from_ to _Folders_, or set `#board:columnsFrom=folders` on the board.
+
+In this mode:
+
+*   Each direct child note of the board is a column, titled by that note and in the order of the note tree.
+*   The cards of a column are the direct children of its note. A card's own children stay inside the card.
+*   A note is in exactly one column, since it sits in exactly one folder.
+*   Dragging a card to another column, or using _Move to_, moves the note into that folder.
+*   _New item_ and _Insert above/below_ create the note inside the column's folder.
+*   Adding, renaming, reordering or deleting a column does the same to its note. Deleting a column opens the usual delete notes dialog.
+*   Changes made in the note tree, such as renaming a folder or moving a note between folders, show on the board straight away.
+*   _Remove from board_ is not offered, since a note leaves the board only by leaving its folder.
