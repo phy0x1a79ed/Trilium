@@ -1,6 +1,7 @@
 import { BulkAction, type DefinitionObject, promotedAttributeDefinitionParser } from "@triliumnext/commons";
 
 import appContext from "../../../components/app_context";
+import type FBranch from "../../../entities/fbranch";
 import FNote from "../../../entities/fnote";
 import attributes from "../../../services/attributes";
 import branches from "../../../services/branches";
@@ -27,7 +28,9 @@ export default class BoardApi {
         private viewConfig: BoardViewData,
         private saveConfig: (newConfig: BoardViewData) => void,
         private setBranchIdToEdit: (branchId: string | undefined) => void,
-        private statusDefinition?: BoardStatusDefinition
+        private statusDefinition?: BoardStatusDefinition,
+        /** The branch of each column's folder, keyed by the folder's noteId. Set only in folder mode. */
+        private folderBranches?: Map<string, FBranch>
     ) {
         this.isRelationMode = statusAttribute.startsWith("~");
 
@@ -37,7 +40,27 @@ export default class BoardApi {
         this.statusAttribute = statusAttribute;
     };
 
+    /** Whether the columns are the board's child notes rather than the values of a label. */
+    get isFolderMode() {
+        return this.folderBranches !== undefined;
+    }
+
+    /** The text a column is shown by: the folder's title in folder mode, the value itself otherwise. */
+    getColumnTitle(column: string) {
+        if (!this.isFolderMode) return column;
+        return froca.getNoteFromCache(column)?.title ?? column;
+    }
+
     async createNewItem(column: string, title: string) {
+        if (this.isFolderMode) {
+            await note_create.createNote(column, {
+                activate: false,
+                title,
+                isProtected: this.parentNote.isProtected
+            });
+            return;
+        }
+
         try {
             // Create a new note as a child of the parent note
             const { note: newNote, branch: newBranch } = await note_create.createNote(this.parentNote.noteId, {
@@ -54,7 +77,17 @@ export default class BoardApi {
         }
     }
 
-    async changeColumn(noteId: string, newColumn: string) {
+    /**
+     * @param branchId the card's branch, which folder mode moves. Looked up by `noteId` when omitted.
+     */
+    async changeColumn(noteId: string, newColumn: string, branchId?: string) {
+        if (this.isFolderMode) {
+            const card = this.findCard(noteId, branchId);
+            if (!card || card.column === newColumn) return;
+            await this.placeInFolder(card.branchId, newColumn, Number.POSITIVE_INFINITY);
+            return;
+        }
+
         if (this.isRelationMode) {
             await attributes.setRelation(noteId, this.statusAttribute, newColumn);
         } else {
@@ -67,6 +100,18 @@ export default class BoardApi {
             return;
         }
 
+        if (this.isFolderMode) {
+            const title = columnName.trim();
+            if (this.columns.some(column => this.getColumnTitle(column) === title)) return false;
+            await note_create.createNote(this.parentNote.noteId, {
+                activate: false,
+                title,
+                type: "book",
+                isProtected: this.parentNote.isProtected
+            });
+            return true;
+        }
+
         const columns = this.viewConfig?.columns ?? [];
 
         // Add the new column to persisted data if it doesn't exist
@@ -76,6 +121,14 @@ export default class BoardApi {
     }
 
     async removeColumn(column: string) {
+        if (this.isFolderMode) {
+            const folderBranch = this.folderBranches?.get(column);
+            if (folderBranch) {
+                await branches.deleteNotes([ folderBranch.branchId ], false, false);
+            }
+            return;
+        }
+
         if (this.isColumnFixedByDefinition(column)) {
             toast.showError(t("board_view.column-fixed-by-definition"));
             return;
@@ -92,6 +145,11 @@ export default class BoardApi {
     }
 
     async renameColumn(oldValue: string, newValue: string) {
+        if (this.isFolderMode) {
+            await server.put(`notes/${oldValue}/title`, { title: newValue.trim() });
+            return;
+        }
+
         if (this.isColumnFixedByDefinition(oldValue)) {
             toast.showError(t("board_view.column-fixed-by-definition"));
             return;
@@ -139,6 +197,12 @@ export default class BoardApi {
 
         newColumns.splice(adjustedToIndex, 0, movedColumn);
 
+        if (this.isFolderMode) {
+            this.moveFolder(movedColumn, newColumns[adjustedToIndex + 1], newColumns[adjustedToIndex - 1])
+                .catch((e) => console.error("Failed to reorder the board's folders:", e));
+            return newColumns;
+        }
+
         // `columns` is derived render state and can lag behind the persisted config (it is rebuilt
         // only once the view re-renders), so anything it hasn't caught up with yet is kept at the
         // end instead of being dropped from the config.
@@ -157,6 +221,8 @@ export default class BoardApi {
      * to disk but stay invisible until the view is re-entered.
      */
     private storeColumns(columns: BoardColumnData[]) {
+        if (this.isFolderMode) return;
+
         this.viewConfig = { ...this.viewConfig, columns };
         this.saveConfig(this.viewConfig);
         // Not awaited — every caller is the tail of a user gesture the board has already rendered —
@@ -179,7 +245,7 @@ export default class BoardApi {
      * but reaches the definition only on the next column gesture, which stores the whole list.
      */
     async syncColumnsToDefinition(columns: string[]) {
-        if (this.isRelationMode || !canStoreColumnsInDefinition(this.statusDefinition)) {
+        if (this.isFolderMode || this.isRelationMode || !canStoreColumnsInDefinition(this.statusDefinition)) {
             return;
         }
 
@@ -233,7 +299,8 @@ export default class BoardApi {
         column: string,
         relativeToBranchId: string,
         direction: "before" | "after") {
-        const { note, branch } = await note_create.createNote(this.parentNote.noteId, {
+        const parentNoteId = this.isFolderMode ? column : this.parentNote.noteId;
+        const { note, branch } = await note_create.createNote(parentNoteId, {
             activate: false,
             targetBranchId: relativeToBranchId,
             target: direction,
@@ -244,8 +311,9 @@ export default class BoardApi {
             throw new Error("Failed to create note");
         }
 
-        const { noteId } = note;
-        await this.changeColumn(noteId, column);
+        if (!this.isFolderMode) {
+            await this.changeColumn(note.noteId, column);
+        }
         this.startEditing(branch.branchId);
 
         return note;
@@ -268,6 +336,7 @@ export default class BoardApi {
     }
 
     removeFromBoard(noteId: string) {
+        if (this.isFolderMode) return;
         const note = froca.getNoteFromCache(noteId);
         if (!note) return;
         if (this.isRelationMode) {
@@ -277,6 +346,12 @@ export default class BoardApi {
     }
 
     async moveWithinBoard(noteId: string, sourceBranchId: string, sourceIndex: number, targetIndex: number, sourceColumn: string, targetColumn: string) {
+        if (this.isFolderMode) {
+            if (sourceColumn === targetColumn && sourceIndex === targetIndex) return;
+            await this.placeInFolder(sourceBranchId, targetColumn, targetIndex);
+            return;
+        }
+
         const targetItems = this.byColumn?.get(targetColumn) ?? [];
 
         const note = froca.getNoteFromCache(noteId);
@@ -310,6 +385,79 @@ export default class BoardApi {
                 await branches.moveAfterBranch([ sourceBranchId ], lastItem.branch.branchId);
             }
         }
+    }
+
+    /**
+     * Places a note dragged from the note tree into a folder column at `targetIndex`. A note that
+     * already has a card on the board is moved there. Any other note is cloned into the folder, so
+     * its place elsewhere in the tree stays.
+     */
+    async dropFromTree(noteId: string, column: string, targetIndex: number) {
+        const card = this.findCard(noteId);
+        if (card) {
+            await this.placeInFolder(card.branchId, column, targetIndex);
+            return;
+        }
+
+        const targetItems = this.byColumn?.get(column) ?? [];
+        if (targetIndex > 0 && targetItems.length) {
+            const afterItem = targetItems[Math.min(targetIndex, targetItems.length) - 1];
+            await branches.cloneNoteAfter(noteId, afterItem.branch.branchId);
+        } else {
+            await branches.cloneNoteToParentNote(noteId, column);
+        }
+    }
+
+    /**
+     * Moves a card's branch into the folder of `column`, before the card now at `targetIndex`, or
+     * last when `targetIndex` is past the end. A move to another folder replaces the branch, so
+     * `branchId` must not be used again afterwards.
+     */
+    private async placeInFolder(branchId: string, column: string, targetIndex: number) {
+        const targetItems = this.byColumn?.get(column) ?? [];
+
+        if (targetIndex < targetItems.length) {
+            const beforeBranchId = targetItems[targetIndex].branch.branchId;
+            if (beforeBranchId !== branchId) {
+                await branches.moveBeforeBranch([ branchId ], beforeBranchId);
+            }
+        } else if (targetItems.length) {
+            const afterBranchId = targetItems[targetItems.length - 1].branch.branchId;
+            if (afterBranchId !== branchId) {
+                await branches.moveAfterBranch([ branchId ], afterBranchId);
+            }
+        } else {
+            const folderBranch = this.folderBranches?.get(column);
+            if (folderBranch) {
+                await branches.moveToParentNote([ branchId ], folderBranch.branchId);
+            }
+        }
+    }
+
+    /** Moves a column's folder branch between its new neighbours in the board's child list. */
+    private async moveFolder(column: string, nextColumn: string | undefined, previousColumn: string | undefined) {
+        const branchId = this.folderBranches?.get(column)?.branchId;
+        if (!branchId) return;
+
+        const nextBranchId = nextColumn ? this.folderBranches?.get(nextColumn)?.branchId : undefined;
+        const previousBranchId = previousColumn ? this.folderBranches?.get(previousColumn)?.branchId : undefined;
+        if (nextBranchId) {
+            await branches.moveBeforeBranch([ branchId ], nextBranchId);
+        } else if (previousBranchId) {
+            await branches.moveAfterBranch([ branchId ], previousBranchId);
+        }
+    }
+
+    /** Finds a card and the column it sits in, by its branch when given, by its note otherwise. */
+    private findCard(noteId: string, branchId?: string) {
+        for (const [ column, cards ] of this.byColumn ?? []) {
+            for (const card of cards) {
+                if (branchId ? card.branch.branchId === branchId : card.note.noteId === noteId) {
+                    return { column, branchId: card.branch.branchId };
+                }
+            }
+        }
+        return undefined;
     }
 
 }

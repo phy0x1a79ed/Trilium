@@ -114,7 +114,7 @@ export default function Column({
                         <span className="title">
                             {isInRelationMode
                                 ? <NoteLink notePath={column} showNoteIcon />
-                                : column}
+                                : api.getColumnTitle(column)}
                         </span>
                         <span className="counter-badge">{columnItems?.length ?? 0}</span>
                         <div className="spacer" />
@@ -126,7 +126,7 @@ export default function Column({
                     </>
                 ) : (
                     <TitleEditor
-                        currentValue={column}
+                        currentValue={api.getColumnTitle(column)}
                         save={newTitle => api.renameColumn(column, newTitle)}
                         dismiss={() => setColumnNameToEdit(undefined)}
                         mode={isInRelationMode ? "relation" : "normal"}
@@ -279,6 +279,13 @@ function useDragging({ column, columnIndex, columnItems, isEditing, api, parentN
         if (Array.isArray(draggedCard)) {
             // From note tree.
             const { noteId, branchId } = draggedCard[0];
+            if (api.isFolderMode) {
+                if (dropPosition) {
+                    await api.dropFromTree(noteId, column, dropPosition.index);
+                }
+                return;
+            }
+
             const targetNote = await froca.getNote(noteId, true);
             const parentNoteId = parentNote.noteId;
             if (!dropPosition) return;

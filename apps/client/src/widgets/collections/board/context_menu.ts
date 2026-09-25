@@ -20,6 +20,12 @@ export function openColumnContextMenu(api: Api, event: ContextMenuEvent, column:
                 title: t("board_view.delete-column"),
                 uiIcon: "bx bx-trash",
                 async handler() {
+                    if (api.isFolderMode) {
+                        // Deleting the folder shows Trilium's own delete dialog, which confirms.
+                        await api.removeColumn(column);
+                        return;
+                    }
+
                     const confirmed = await dialog.confirm(t("board_view.delete-column-confirmation"));
                     if (!confirmed) {
                         return;
@@ -58,18 +64,18 @@ export function openNoteContextMenu(api: Api, event: ContextMenuEvent, note: FNo
                 title: t("board_view.move-to"),
                 uiIcon: "bx bx-transfer",
                 items: api.columns.map(columnToMoveTo => ({
-                    title: columnToMoveTo,
+                    title: api.getColumnTitle(columnToMoveTo),
                     enabled: columnToMoveTo !== column,
-                    handler: () => api.changeColumn(note.noteId, columnToMoveTo)
+                    handler: () => api.changeColumn(note.noteId, columnToMoveTo, branchId)
                 })),
             },
             { kind: "separator" },
             getArchiveMenuItem(note),
-            {
+            ...(api.isFolderMode ? [] : [ {
                 title: t("board_view.remove-from-board"),
                 uiIcon: "bx bx-task-x",
                 handler: () => api.removeFromBoard(note.noteId)
-            },
+            } ]),
             {
                 title: t("board_view.delete-note"),
                 uiIcon: "bx bx-trash",

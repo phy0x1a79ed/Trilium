@@ -14,6 +14,12 @@ export const BOARD_TEMPLATE_ID = "_template_board";
 /** The label a board groups by when `#board:groupBy` does not name one. */
 export const DEFAULT_GROUP_BY = "status";
 
+/**
+ * Where a board takes its columns from when `#board:columnsFrom` is not set: `label` groups by the
+ * `#board:groupBy` label, `folders` makes each child note of the board a column.
+ */
+export const DEFAULT_COLUMNS_FROM = "label";
+
 export interface BoardStatusDefinition {
     /** The definition attribute, wherever it is owned. */
     attribute: FAttribute;

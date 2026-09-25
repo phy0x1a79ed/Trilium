@@ -52,6 +52,38 @@ export async function getBoardData(
     };
 }
 
+/**
+ * Reads a board whose columns are its child notes: one column per child, keyed by the child's
+ * noteId, holding that child's own children as cards. Cards below that level stay inside their
+ * card, so a task's subtasks do not become cards of their own.
+ */
+export async function getFolderBoardData(parentNote: FNote, includeArchived: boolean) {
+    const byColumn: ColumnMap = new Map();
+    const folderBranches = new Map<string, FBranch>();
+
+    for (const folderBranch of parentNote.getChildBranches()) {
+        const folder = await folderBranch.getNote();
+        if (!folder || folder.type === "search" || (!includeArchived && folder.isArchived)) continue;
+        if (folderBranches.has(folder.noteId)) continue;
+
+        const cards: BoardCard[] = [];
+        for (const branch of folder.getChildBranches()) {
+            const note = await branch.getNote();
+            if (!note || (!includeArchived && note.isArchived)) continue;
+            cards.push({ branch, note, path: "" });
+        }
+
+        byColumn.set(folder.noteId, cards);
+        folderBranches.set(folder.noteId, folderBranch);
+    }
+
+    return {
+        byColumn,
+        columns: [ ...byColumn.keys() ],
+        folderBranches
+    };
+}
+
 async function recursiveGroupBy(branches: FBranch[], byColumn: ColumnMap, groupByColumn: string, includeArchived: boolean, seenNoteIds: Set<string>, path: string) {
     for (const branch of branches) {
         const note = await branch.getNote();

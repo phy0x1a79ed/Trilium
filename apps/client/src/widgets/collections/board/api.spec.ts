@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import FAttribute from "../../../entities/fattribute";
 import FNote from "../../../entities/fnote";
+import attributes from "../../../services/attributes";
+import branches from "../../../services/branches";
 import { executeBulkActions } from "../../../services/bulk_action";
 import froca from "../../../services/froca";
 import noteAttributeCache from "../../../services/note_attribute_cache";
+import note_create from "../../../services/note_create";
 import server from "../../../services/server";
 import { buildNote } from "../../../test/easy-froca";
 import { BoardViewData } from ".";
 import BoardApi from "./api";
 import { BOARD_TEMPLATE_ID, getStatusDefinition } from "./columns";
+import { getFolderBoardData } from "./data";
 
 vi.mock("../../../services/bulk_action", () => ({
     executeBulkActions: vi.fn(async () => {})
@@ -326,6 +330,98 @@ describe("BoardApi.syncColumnsToDefinition", () => {
     });
 });
 
+describe("BoardApi in folder mode", () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.spyOn(server, "put").mockResolvedValue(undefined);
+        for (const method of [
+            "moveBeforeBranch", "moveAfterBranch", "moveToParentNote",
+            "cloneNoteAfter", "cloneNoteToParentNote"
+        ] as const) {
+            vi.spyOn(branches, method).mockResolvedValue(undefined);
+        }
+        vi.spyOn(branches, "deleteNotes").mockResolvedValue(true);
+        vi.spyOn(attributes, "setLabel").mockResolvedValue(undefined);
+        vi.spyOn(note_create, "createNote").mockImplementation(async () => ({
+            note: buildNote({ id: "created", title: "Created" }),
+            branch: { branchId: "created_branch" }
+        }) as unknown as Awaited<ReturnType<typeof note_create.createNote>>);
+    });
+
+    it("moves a card's branch into the folder it is dropped on", async () => {
+        const { api } = await createFolderApi();
+
+        // Before the card at the drop position, after the last card, and into an empty folder.
+        await api.moveWithinBoard("t1", "planned_t1", 0, 0, "planned", "done");
+        await api.moveWithinBoard("t1", "planned_t1", 0, 5, "planned", "done");
+        await api.moveWithinBoard("t1", "planned_t1", 0, 0, "planned", "empty");
+        // "Move to" puts the card last, and names the branch it was opened on.
+        await api.changeColumn("t2", "done", "planned_t2");
+        await api.changeColumn("t2", "planned", "planned_t2");
+
+        expect(branches.moveBeforeBranch).toHaveBeenCalledExactlyOnceWith([ "planned_t1" ], "done_t3");
+        expect(vi.mocked(branches.moveAfterBranch).mock.calls).toEqual([
+            [ [ "planned_t1" ], "done_t3" ],
+            [ [ "planned_t2" ], "done_t3" ]
+        ]);
+        expect(branches.moveToParentNote).toHaveBeenCalledExactlyOnceWith([ "planned_t1" ], "tasks_empty");
+    });
+
+    it("turns column edits into edits of the folders", async () => {
+        const { api } = await createFolderApi();
+
+        await api.renameColumn("planned", "Next up");
+        expect(await api.addNewColumn("Done")).toBe(false);
+        expect(await api.addNewColumn("Blocked")).toBe(true);
+        await api.removeColumn("empty");
+        expect(api.reorderColumn(2, 0)).toEqual([ "done", "planned", "empty" ]);
+
+        expect(server.put).toHaveBeenCalledExactlyOnceWith("notes/planned/title", { title: "Next up" });
+        expect(note_create.createNote).toHaveBeenCalledExactlyOnceWith("tasks", expect.objectContaining({
+            title: "Blocked", type: "book"
+        }));
+        expect(branches.deleteNotes).toHaveBeenCalledExactlyOnceWith([ "tasks_empty" ], false, false);
+        await vi.waitFor(() => expect(branches.moveBeforeBranch)
+            .toHaveBeenCalledExactlyOnceWith([ "tasks_done" ], "tasks_planned"));
+    });
+
+    it("creates new cards inside the column's folder", async () => {
+        const { api } = await createFolderApi();
+
+        await api.createNewItem("done", "New task");
+        await api.insertRowAtPosition("planned", "planned_t2", "before");
+
+        expect(vi.mocked(note_create.createNote).mock.calls.map(([ parent, opts ]) => [ parent, opts?.targetBranchId ]))
+            .toEqual([ [ "done", undefined ], [ "planned", "planned_t2" ] ]);
+    });
+
+    it("places a note dragged from the tree: moving a card already on the board, cloning any other", async () => {
+        const { api } = await createFolderApi();
+        buildNote({ id: "outsider", title: "Outsider" });
+
+        await api.dropFromTree("t3", "planned", 1);
+        await api.dropFromTree("outsider", "planned", 1);
+        await api.dropFromTree("outsider", "empty", 0);
+
+        expect(branches.moveBeforeBranch).toHaveBeenCalledExactlyOnceWith([ "done_t3" ], "planned_t2");
+        expect(branches.cloneNoteAfter).toHaveBeenCalledExactlyOnceWith("outsider", "planned_t1");
+        expect(branches.cloneNoteToParentNote).toHaveBeenCalledExactlyOnceWith("outsider", "empty");
+    });
+
+    it("writes no status label, definition or view config", async () => {
+        const { api, saved } = await createFolderApi();
+
+        await api.syncColumnsToDefinition(api.columns);
+        await api.addNewColumn("Blocked");
+        await api.removeFromBoard("t1");
+        await api.changeColumn("t1", "done", "planned_t1");
+
+        expect(attributes.setLabel).not.toHaveBeenCalled();
+        expect(server.put).not.toHaveBeenCalled();
+        expect(saved).toHaveLength(0);
+    });
+});
+
 /** A board whose definition the sync must not touch, however it came to have one. */
 interface UntouchableBoard {
     owned?: Record<string, string>;
@@ -362,4 +458,23 @@ function buildBoard(
     }
 
     return board;
+}
+
+/** A folder board `tasks` with the columns Planned (two cards), Empty and Done (one card). */
+async function createFolderApi() {
+    const board = buildNote({
+        id: "tasks",
+        title: "Tasks",
+        children: [
+            { id: "planned", title: "Planned", children: [ { id: "t1", title: "One" }, { id: "t2", title: "Two" } ] },
+            { id: "empty", title: "Empty" },
+            { id: "done", title: "Done", children: [ { id: "t3", title: "Three" } ] }
+        ]
+    });
+    const { byColumn, columns, folderBranches } = await getFolderBoardData(board, false);
+    const saved: BoardViewData[] = [];
+    const api = new BoardApi(
+        byColumn, columns, board, "status", {}, (config) => saved.push(config), () => {},
+        undefined, folderBranches);
+    return { api, saved };
 }
