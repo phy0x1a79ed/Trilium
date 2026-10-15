@@ -6,7 +6,9 @@ import BoardApi from "./api";
 import { BoardActionsContext, TitleEditor } from ".";
 import { ContextMenuEvent } from "../../../menus/context_menu";
 import { openNoteContextMenu } from "./context_menu";
+import { hasFilter } from "./filters";
 import { t } from "../../../services/i18n";
+import type { ChipColorOverrides } from "../../attribute_widgets/chip_colors";
 import UserAttributesDisplay from "../../attribute_widgets/UserAttributesList";
 import { useNoteIcon, useNoteLabelBoolean, useTriliumEvent } from "../../react/hooks";
 
@@ -27,7 +29,8 @@ function Card({
     column,
     index,
     isDragging,
-    isEditing
+    isEditing,
+    chipColors
 }: {
     api: BoardApi,
     note: FNote,
@@ -44,7 +47,9 @@ function Card({
      * Passed down rather than derived here from the drag state's `branchIdToEdit`, so that a card
      * subscribes only to the board's stable context and a drag leaves it off the render path.
      */
-    isEditing: boolean
+    isEditing: boolean,
+    /** Parsed once by the board, so that the memo below compares it by identity. */
+    chipColors: ChipColorOverrides
 }) {
     const { setBranchIdToEdit, setDraggedCard } = useContext(BoardActionsContext);
     const colorClass = note.getColorClass() || '';
@@ -87,6 +92,14 @@ function Card({
         e.stopPropagation(); // don't also open the note
         setBranchIdToEdit(branch.branchId);
     }, [ setBranchIdToEdit, branch ]);
+
+    const handleChipClick = useCallback((name: string, value: string) => {
+        api.toggleFilter(name, value);
+    }, [ api ]);
+
+    const isChipActive = useCallback((name: string, value: string) => {
+        return hasFilter(api.filters, name, value);
+    }, [ api ]);
 
     const handleKeyDown = useCallback((e: KeyboardEvent) => {
         if (e.key === "Enter") {
@@ -134,7 +147,13 @@ function Card({
                         title={t("board_view.edit-note-title")}
                         onClick={handleEdit}
                     />
-                    <UserAttributesDisplay note={note} ignoredAttributes={[api.statusAttribute]} />
+                    <UserAttributesDisplay
+                        note={note}
+                        ignoredAttributes={[api.statusAttribute]}
+                        chipColors={chipColors}
+                        onChipClick={handleChipClick}
+                        isChipActive={isChipActive}
+                    />
                 </>
             ) : (
                 <TitleEditor

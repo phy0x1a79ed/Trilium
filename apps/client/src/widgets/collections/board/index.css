@@ -364,3 +364,32 @@ body.mobile .board-view-container .board-add-column {
 .board-view-container .board-note .title .path {
   opacity: 0.6;
 }
+
+.board-view .board-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.5em var(--content-margin-inline) 0;
+}
+
+.board-view .board-filter-bar .user-attributes {
+  margin-top: 0;
+}
+
+.board-view .board-filter-bar .board-filter-label {
+  color: var(--muted-text-color);
+  font-size: 0.9em;
+}
+
+.board-view .board-filter-bar .board-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15em;
+  padding-inline-end: 2px;
+}
+
+.board-view .board-filter-bar .board-filter-remove {
+  --icon-button-size: 18px;
+  color: inherit;
+}

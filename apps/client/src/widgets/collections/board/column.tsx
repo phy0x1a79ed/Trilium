@@ -7,6 +7,7 @@ import { ContextMenuEvent } from "../../../menus/context_menu";
 import branches from "../../../services/branches";
 import froca from "../../../services/froca";
 import { t } from "../../../services/i18n";
+import type { ChipColorOverrides } from "../../attribute_widgets/chip_colors";
 import { DragData, TREE_CLIPBOARD_TYPE } from "../../note_tree";
 import Icon from "../../react/Icon";
 import NoteLink from "../../react/NoteLink";
@@ -31,7 +32,8 @@ export default function Column({
     parentNote,
     onColumnHover,
     isAnyColumnDragging,
-    isInRelationMode
+    isInRelationMode,
+    chipColors
 }: {
     columnItems?: BoardCard[];
     isDraggingColumn: boolean,
@@ -39,7 +41,8 @@ export default function Column({
     parentNote: FNote,
     onColumnHover?: (index: number, mouseX: number, rect: DOMRect) => void,
     isAnyColumnDragging?: boolean,
-    isInRelationMode: boolean
+    isInRelationMode: boolean,
+    chipColors: ChipColorOverrides
 } & DragContext) {
     const [ isVisible, setVisible ] = useState(true);
     const { setColumnNameToEdit } = useContext(BoardActionsContext);
@@ -154,6 +157,7 @@ export default function Column({
                                 index={index}
                                 isDragging={draggedCard?.noteId === note.noteId}
                                 isEditing={branch.branchId === branchIdToEdit}
+                                chipColors={chipColors}
                             />
                         </Fragment>
                     );
