@@ -128,7 +128,7 @@ const BUILTIN_ATTRIBUTES = [
     { type: "label", name: "yearNote", valueType: "text", hasUserValue: true },
     { type: "label", name: "pageSize", valueType: "number" },
     { type: "label", name: "viewType", valueType: "select", selectOptions: [
-        "list", "grid", "calendar", "table", "geoMap", "board", "presentation", "dashboard"
+        "list", "grid", "calendar", "table", "geoMap", "board", "presentation", "dashboard", "chat"
     ] },
     { type: "label", name: "mapRootNoteId", valueType: "text" },
     { type: "label", name: "mapExcludeRelation", valueType: "text" },
