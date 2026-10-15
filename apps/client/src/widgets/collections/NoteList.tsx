@@ -55,6 +55,9 @@ const ViewComponents: Record<ViewTypeOptions, { normal: LazyLoadedComponent, pri
     },
     dashboard: {
         normal: lazy(() => import("./dashboard/index.js"))
+    },
+    chat: {
+        normal: lazy(() => import("./chat/index.js"))
     }
 };
 
@@ -170,7 +173,7 @@ export function useNoteViewType(note?: FNote | null): ViewTypeOptions | undefine
 export function useNoteIds(note: FNote | null | undefined, viewType: ViewTypeOptions | undefined, ntxId: string | null | undefined) {
     const [ noteIds, setNoteIds ] = useState<string[]>([]);
     const [ includeArchived ] = useNoteLabelBoolean(note, "includeArchived");
-    const directChildrenOnly = (viewType === "list" || viewType === "grid" || viewType === "table" || viewType === "dashboard" || note?.type === "search");
+    const directChildrenOnly = (viewType === "list" || viewType === "grid" || viewType === "table" || viewType === "dashboard" || viewType === "chat" || note?.type === "search");
     // getNoteIds can do a server round-trip (archive filtering), so concurrent refreshes may resolve
     // out of order. Track the latest issued refresh so a stale one can't clobber a newer result.
     const refreshSeqRef = useRef(0);

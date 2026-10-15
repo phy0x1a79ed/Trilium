@@ -1295,6 +1295,7 @@
     "board": "Board",
     "presentation": "Presentation",
     "dashboard": "Dashboard",
+    "chat": "Chat",
     "include_archived_notes": "Show archived notes",
     "hide_child_notes": "Hide child notes in tree",
     "open_all_in_tabs": "Open all",
@@ -3338,6 +3339,14 @@
   },
   "table_context_menu": {
     "delete_row": "Delete row"
+  },
+  "chat_view": {
+    "empty": "No messages yet.",
+    "placeholder": "Write a message. Enter sends, Shift+Enter starts a new line.",
+    "send": "Send",
+    "sending": "Sending…",
+    "unsent_title": "Unsent message",
+    "send_failed": "The message was not sent: {{message}}"
   },
   "board_view": {
     "delete-note": "Delete note...",

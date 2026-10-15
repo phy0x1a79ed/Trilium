@@ -25,7 +25,8 @@ export const ICON_MAPPINGS: Record<ViewTypeOptions, string> = {
     geoMap: "bx bx-map-alt",
     board: "bx bx-columns",
     presentation: "bx bx-rectangle",
-    dashboard: "bx bxs-dashboard"
+    dashboard: "bx bxs-dashboard",
+    chat: "bx bx-conversation"
 };
 
 export const VIEW_TYPE_MAPPINGS: Record<ViewTypeOptions, string> = {
@@ -36,7 +37,8 @@ export const VIEW_TYPE_MAPPINGS: Record<ViewTypeOptions, string> = {
     geoMap: t("book_properties.geo-map"),
     board: t("book_properties.board"),
     presentation: t("book_properties.presentation"),
-    dashboard: t("book_properties.dashboard")
+    dashboard: t("book_properties.dashboard"),
+    chat: t("book_properties.chat")
 };
 
 const MAX_OPEN_TABS = 50;
