@@ -1,7 +1,8 @@
 import "./UserAttributesList.css";
 
 import type { DefinitionObject } from "@triliumnext/commons";
-import { ComponentChildren, CSSProperties } from "preact";
+import clsx from "clsx";
+import { ComponentChildren, CSSProperties, JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import FNote from "../../entities/fnote";
@@ -11,11 +12,23 @@ import { formatDateTime } from "../../utils/formatters";
 import { useTriliumEvent } from "../react/hooks";
 import Icon from "../react/Icon";
 import NoteLink from "../react/NoteLink";
+import { ChipColorOverrides, getChipColorProps } from "./chip_colors";
 
 interface UserAttributesListProps {
     note: FNote;
     ignoredAttributes?: string[];
+    /**
+     * Gives each text label chip a background color picked from its name and value. Chips are left
+     * plain when omitted.
+     */
+    chipColors?: ChipColorOverrides;
+    /** Makes text label chips clickable; the click does not reach the element around the list. */
+    onChipClick?: (name: string, value: string) => void;
+    /** Marks the chips that stand for an active selection. */
+    isChipActive?: (name: string, value: string) => boolean;
 }
+
+type ChipOptions = Pick<UserAttributesListProps, "chipColors" | "onChipClick" | "isChipActive">;
 
 interface AttributeWithDefinitions {
     friendlyName: string;
@@ -25,11 +38,11 @@ interface AttributeWithDefinitions {
     def: DefinitionObject;
 }
 
-export default function UserAttributesDisplay({ note, ignoredAttributes }: UserAttributesListProps) {
+export default function UserAttributesDisplay({ note, ignoredAttributes, ...chipOptions }: UserAttributesListProps) {
     const userAttributes = useNoteAttributesWithDefinitions(note, ignoredAttributes);
     return userAttributes?.length > 0 && (
         <div className="user-attributes">
-            {userAttributes?.map(attr => buildUserAttribute(attr))}
+            {userAttributes?.map(attr => buildUserAttribute(attr, chipOptions))}
         </div>
     );
 
@@ -47,20 +60,48 @@ function useNoteAttributesWithDefinitions(note: FNote, attributesToIgnore:  stri
     return userAttributes;
 }
 
-function UserAttribute({ attr, children, style }: { attr: AttributeWithDefinitions, children: ComponentChildren, style?: CSSProperties }) {
+function UserAttribute({ attr, children, style, extraClassName, onActivate }: {
+    attr: AttributeWithDefinitions,
+    children: ComponentChildren,
+    style?: CSSProperties,
+    extraClassName?: string,
+    onActivate?: () => void
+}) {
     const className = attr.type === "label" ? `label ${attr.def.labelType}` : "relation";
+    const handlers: JSX.HTMLAttributes<HTMLSpanElement> = onActivate ? {
+        role: "button",
+        tabIndex: 0,
+        onClick: (e: MouseEvent) => {
+            e.stopPropagation();
+            onActivate();
+        },
+        onKeyDown: (e: KeyboardEvent) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onActivate();
+            }
+        }
+    } : {};
 
     return (
-        <span key={attr.friendlyName} className={`user-attribute type-${className}`} style={style}>
+        <span
+            key={attr.friendlyName}
+            className={clsx("user-attribute", `type-${className}`, extraClassName)}
+            style={style}
+            {...handlers}
+        >
             {children}
         </span>
     );
 }
 
-function buildUserAttribute(attr: AttributeWithDefinitions): ComponentChildren {
+function buildUserAttribute(attr: AttributeWithDefinitions, { chipColors, onChipClick, isChipActive }: ChipOptions = {}): ComponentChildren {
     const defaultLabel = <><strong>{attr.friendlyName}:</strong>{" "}</>;
     let content: ComponentChildren;
     let style: CSSProperties | undefined;
+    let extraClassName: string | undefined;
+    let onActivate: (() => void) | undefined;
 
     if (attr.type === "label") {
         const value = attr.value;
@@ -104,15 +145,27 @@ function buildUserAttribute(attr: AttributeWithDefinitions): ComponentChildren {
                 content = <>{attr.friendlyName}</>;
                 break;
             case "text":
-            default:
+            default: {
                 content = <>{defaultLabel}{value}</>;
+                const color = chipColors && getChipColorProps(attr.name, value, chipColors);
+                const clickable = !!onChipClick;
+                extraClassName = clsx(
+                    color?.className,
+                    clickable && "clickable",
+                    isChipActive?.(attr.name, value) && "active"
+                );
+                style = color?.style;
+                if (onChipClick) {
+                    onActivate = () => onChipClick(attr.name, value);
+                }
                 break;
+            }
         }
     } else if (attr.type === "relation") {
         content = <>{defaultLabel}<NoteLink notePath={attr.value} showNoteIcon /></>;
     }
 
-    return <UserAttribute attr={attr} style={style}>{content}</UserAttribute>;
+    return <UserAttribute attr={attr} style={style} extraClassName={extraClassName} onActivate={onActivate}>{content}</UserAttribute>;
 }
 
 function getAttributesWithDefinitions(note: FNote, attributesToIgnore: string[] = []): AttributeWithDefinitions[] {
