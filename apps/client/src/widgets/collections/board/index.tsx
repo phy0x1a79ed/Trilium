@@ -9,6 +9,7 @@ import { t } from "../../../services/i18n";
 import type LoadResults from "../../../services/load_results";
 import { isIMEComposing } from "../../../services/shortcuts";
 import toast from "../../../services/toast";
+import { parseChipColorOverrides } from "../../attribute_widgets/chip_colors";
 import CollectionProperties from "../../note_bars/CollectionProperties";
 import FormTextArea from "../../react/FormTextArea";
 import FormTextBox from "../../react/FormTextBox";
@@ -22,9 +23,13 @@ import BoardApi from "./api";
 import { DEFAULT_COLUMNS_FROM, DEFAULT_GROUP_BY, getStatusDefinition } from "./columns";
 import Column from "./column";
 import { ColumnMap, getBoardData, getFolderBoardData } from "./data";
+import FilterBar from "./filter_bar";
+import { type BoardChipFilter, filterColumns, readFilters } from "./filters";
 
 export interface BoardViewData {
     columns?: BoardColumnData[];
+    /** Chips the board is narrowed to; read through {@link readFilters}, since the stored JSON is not trusted. */
+    filters?: BoardChipFilter[];
 }
 
 export interface BoardColumnData {
@@ -98,6 +103,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     const [ statusAttributeWithPrefix ] = useNoteLabelWithDefault(parentNote, "board:groupBy", DEFAULT_GROUP_BY);
     const [ includeArchived ] = useNoteLabelBoolean(parentNote, "includeArchived");
     const [ columnsFrom ] = useNoteLabelWithDefault(parentNote, "board:columnsFrom", DEFAULT_COLUMNS_FROM);
+    const [ chipColorsSource ] = useNoteLabelWithDefault(parentNote, "board:chipColors", "");
+    const chipColors = useMemo(() => parseChipColorOverrides(chipColorsSource), [ chipColorsSource ]);
     const isFolderMode = columnsFrom === "folders";
     const [ folderBranches, setFolderBranches ] = useState<Map<string, FBranch>>();
     const [ byColumn, setByColumn ] = useState<ColumnMap>();
@@ -121,13 +128,18 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
      * `refresh()`'s one-time write so it fires at most once per view, not on every render.
      */
     const hasSeededDefinitionRef = useRef(false);
+    const filters = useMemo(() => readFilters(viewConfig), [ viewConfig ]);
+    const visibleByColumn = useMemo(
+        () => byColumn && filterColumns(byColumn, filters),
+        [ byColumn, filters ]);
     const api = useMemo(() => {
         return new Api(
             byColumn, columns ?? [], parentNote, statusAttributeWithPrefix, viewConfig ?? {}, saveConfig,
-            setBranchIdToEdit, statusDefinition, isFolderMode ? (folderBranches ?? new Map()) : undefined);
+            setBranchIdToEdit, statusDefinition, isFolderMode ? (folderBranches ?? new Map()) : undefined,
+            visibleByColumn);
     }, [
         byColumn, columns, parentNote, statusAttributeWithPrefix, viewConfig, saveConfig,
-        setBranchIdToEdit, statusDefinition, isFolderMode, folderBranches
+        setBranchIdToEdit, statusDefinition, isFolderMode, folderBranches, visibleByColumn
     ]);
     // Every member is one of useState's own setters, so this value is built once and never changes
     // identity -- a drag cannot reach anything that reads only this.
@@ -239,6 +251,7 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
     return (
         <div className="board-view">
             <CollectionProperties note={parentNote} />
+            <FilterBar api={api} filters={filters} chipColors={chipColors} />
             <BoardActionsContext.Provider value={boardActions}>
                 <BoardDragStateContext.Provider value={boardDragState}>
                     {byColumn && columns && <div
@@ -258,7 +271,8 @@ export default function BoardView({ note: parentNote, noteIds, viewConfig, saveC
                                     parentNote={parentNote}
                                     column={column}
                                     columnIndex={index}
-                                    columnItems={byColumn.get(column)}
+                                    columnItems={visibleByColumn?.get(column)}
+                                    chipColors={chipColors}
                                     isDraggingColumn={draggedColumn?.column === column}
                                     onColumnHover={handleColumnHover}
                                     isAnyColumnDragging={!!draggedColumn}

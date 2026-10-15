@@ -150,6 +150,7 @@ export const ATTR_HELP: AttrHelpMap = {
         status: t("attribute_detail.status"),
         "board:groupBy": t("attribute_detail.board_group_by"),
         "board:columnsFrom": t("attribute_detail.board_columns_from"),
+        "board:chipColors": t("attribute_detail.board_chip_colors"),
         stateId: t("attribute_detail.state_id"),
         markdownSymbol: t("attribute_detail.markdown_symbol"),
         isCompleted: t("attribute_detail.is_completed"),

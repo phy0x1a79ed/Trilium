@@ -14,6 +14,7 @@ import toast from "../../../services/toast";
 import { BoardColumnData, BoardViewData } from ".";
 import { type BoardStatusDefinition, canStoreColumnsInDefinition, DEFAULT_GROUP_BY } from "./columns";
 import { ColumnMap } from "./data";
+import { type BoardChipFilter, readFilters, toggleFilter } from "./filters";
 
 export default class BoardApi {
 
@@ -30,7 +31,13 @@ export default class BoardApi {
         private setBranchIdToEdit: (branchId: string | undefined) => void,
         private statusDefinition?: BoardStatusDefinition,
         /** The branch of each column's folder, keyed by the folder's noteId. Set only in folder mode. */
-        private folderBranches?: Map<string, FBranch>
+        private folderBranches?: Map<string, FBranch>,
+        /**
+         * The cards the active filters leave on screen. A drop lands relative to these, so positions
+         * match what the user sees. Renaming or deleting a column still acts on every card in
+         * `byColumn`, hidden ones included.
+         */
+        private visibleByColumn: ColumnMap | undefined = byColumn
     ) {
         this.isRelationMode = statusAttribute.startsWith("~");
 
@@ -39,6 +46,24 @@ export default class BoardApi {
         }
         this.statusAttribute = statusAttribute;
     };
+
+    /** The chips the board is narrowed to, read off the stored view config. */
+    get filters() {
+        return readFilters(this.viewConfig);
+    }
+
+    /** Adds the chip to the board's filters, or removes it when it is already one. */
+    toggleFilter(name: string, value: string) {
+        this.storeFilters(toggleFilter(this.filters, name, value));
+    }
+
+    removeFilter(name: string, value: string) {
+        this.storeFilters(this.filters.filter(filter => filter.name !== name || filter.value !== value));
+    }
+
+    clearFilters() {
+        this.storeFilters([]);
+    }
 
     /** Whether the columns are the board's child notes rather than the values of a label. */
     get isFolderMode() {
@@ -235,6 +260,12 @@ export default class BoardApi {
             });
     }
 
+    /** Persists the filters in a fresh config object, for the reason given at {@link storeColumns}. */
+    private storeFilters(filters: BoardChipFilter[]) {
+        this.viewConfig = { ...this.viewConfig, filters };
+        this.saveConfig(this.viewConfig);
+    }
+
     /**
      * Brings the board's own definition in line with the columns it shows, so that the same list is
      * what the promoted field offers, what the table view's dropdown offers, and what the board shows.
@@ -352,7 +383,7 @@ export default class BoardApi {
             return;
         }
 
-        const targetItems = this.byColumn?.get(targetColumn) ?? [];
+        const targetItems = this.visibleByColumn?.get(targetColumn) ?? [];
 
         const note = froca.getNoteFromCache(noteId);
         if (!note) return;
@@ -399,7 +430,7 @@ export default class BoardApi {
             return;
         }
 
-        const targetItems = this.byColumn?.get(column) ?? [];
+        const targetItems = this.visibleByColumn?.get(column) ?? [];
         if (targetIndex > 0 && targetItems.length) {
             const afterItem = targetItems[Math.min(targetIndex, targetItems.length) - 1];
             await branches.cloneNoteAfter(noteId, afterItem.branch.branchId);
@@ -414,7 +445,7 @@ export default class BoardApi {
      * `branchId` must not be used again afterwards.
      */
     private async placeInFolder(branchId: string, column: string, targetIndex: number) {
-        const targetItems = this.byColumn?.get(column) ?? [];
+        const targetItems = this.visibleByColumn?.get(column) ?? [];
 
         if (targetIndex < targetItems.length) {
             const beforeBranchId = targetItems[targetIndex].branch.branchId;
