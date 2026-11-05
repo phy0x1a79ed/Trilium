@@ -33,8 +33,9 @@ while [ $# -gt 0 ]; do
 done
 
 [ -f "$snapshot" ] || die "no snapshot at $snapshot."
-# A database with a write-ahead log beside it is open in a running server.
-[ ! -e "$snapshot-wal" ] || die "$snapshot has a -wal beside it, so it looks live. Copy a snapshot instead."
+# A database a process holds open is a live vault, not a snapshot.
+held="$(find /proc/[0-9]*/fd -lname "$(realpath "$snapshot")" 2>/dev/null | head -1 || true)"
+[ -z "$held" ] || die "a process holds $snapshot open, so it is live. Copy a snapshot instead."
 
 scratch="$cache/dev-data/$(basename "$root")"
 if [ "$fresh" = 1 ] || [ ! -f "$scratch/document.db" ]; then
