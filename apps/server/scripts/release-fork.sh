@@ -71,7 +71,8 @@ sha256="$(sha256sum "$out/$asset" | cut -d' ' -f1)"
 echo "$sha256  $asset" > "$out/$asset.sha256"
 
 if [ "$branch" = release ]; then
-    git rev-parse -q --verify "refs/tags/fork-$version" >/dev/null || git tag "fork-$version" HEAD
+    # show-ref, not rev-parse: rev-parse reads fork-<x>-g<sha> as describe output.
+    git show-ref --verify --quiet "refs/tags/fork-$version" || git tag "fork-$version" HEAD
 fi
 
 echo
