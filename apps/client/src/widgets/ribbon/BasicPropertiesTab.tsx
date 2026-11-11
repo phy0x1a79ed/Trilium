@@ -5,6 +5,7 @@ import { createPortal } from "preact/compat";
 import { Dispatch, StateUpdater, useCallback, useEffect, useMemo, useState } from "preact/hooks";
 
 import FNote from "../../entities/fnote";
+import attributes from "../../services/attributes";
 import branches from "../../services/branches";
 import dialog from "../../services/dialog";
 import { isExperimentalFeatureEnabled } from "../../services/experimental_features";
@@ -322,6 +323,36 @@ function SharedSwitch({ note }: { note?: FNote | null }) {
             />
         </div>
     );
+}
+
+/**
+ * `#agentWritable` lets awm agents write the note and everything under it. It is switched off
+ * only where it is set: a note that inherits it names the notes that grant it instead.
+ */
+export function useAgentWritableState(note: FNote): [ boolean, (value: boolean) => void ] {
+    const [ , forceRender ] = useState({});
+
+    useTriliumEvent("entitiesReloaded", ({ loadResults }) => {
+        if (loadResults.getAttributeRows().some(attr => attr.name === "agentWritable" && attributes.isAffecting(attr, note))) {
+            forceRender({});
+        }
+    });
+
+    const setter = useCallback((value: boolean) => {
+        if (value) {
+            attributes.setLabel(note.noteId, "agentWritable", "", true);
+            return;
+        }
+        const granting = note.getLabels("agentWritable").filter(label => label.noteId !== note.noteId);
+        if (granting.length) {
+            const notes = [ ...new Set(granting.map(label => label.getNote()?.title ?? label.noteId)) ].join(", ");
+            toast.showError(t("agent_writable_switch.inherited", { notes }));
+            return;
+        }
+        attributes.removeOwnedLabelByName(note, "agentWritable");
+    }, [ note ]);
+
+    return [ note.hasLabel("agentWritable"), setter ];
 }
 
 export function useShareState(note: FNote | null | undefined) {

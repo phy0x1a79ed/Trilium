@@ -2415,6 +2415,10 @@
     "canvasLibraryItem": "Canvas library",
     "importSource": "Import source"
   },
+  "agent_writable_switch": {
+    "title": "Agent writable",
+    "inherited": "Agent writable is granted by {{notes}}. Move this note out of that tree to make it non-writable."
+  },
   "bookmark_switch": {
     "bookmark": "Bookmark",
     "bookmark_this_note": "Bookmark this note to the left side panel",

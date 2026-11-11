@@ -29,7 +29,7 @@ import Dropdown from "../react/Dropdown";
 import { FormDropdownDivider, FormDropdownSubmenu, FormListHeader, FormListItem, FormListToggleableItem } from "../react/FormList";
 import { useIsNoteReadOnly, useNoteContext, useNoteLabel, useNoteLabelBoolean, useNoteLabelOptionalBool, useNoteProperty, useSyncedRef, useTriliumEvent, useTriliumOption } from "../react/hooks";
 import { ParentComponent } from "../react/react_utils";
-import { NoteTypeDropdownContent, useNoteBookmarkState, useShareState } from "./BasicPropertiesTab";
+import { NoteTypeDropdownContent, useAgentWritableState, useNoteBookmarkState, useShareState } from "./BasicPropertiesTab";
 import NoteActionsCustom from "./NoteActionsCustom";
 
 const isNewLayout = isExperimentalFeatureEnabled("new-layout");
@@ -262,6 +262,7 @@ function NoteBasicProperties({ note, focus, isVaultWide }: {
     const itemToFocusRef = useRef<HTMLLIElement>(null);
     const [ isBookmarked, setIsBookmarked ] = useNoteBookmarkState(note);
     const [ isShared, switchShareState ] = useShareState(note);
+    const [ isAgentWritable, setAgentWritable ] = useAgentWritableState(note);
     const [ isTemplate, setIsTemplate ] = useNoteLabelBoolean(note, "template");
     const [ isFullContentWidth, setIsFullContentWidth ] = useNoteLabelBoolean(note, "fullContentWidth");
     const isProtected = useNoteProperty(note, "isProtected");
@@ -293,6 +294,14 @@ function NoteBasicProperties({ note, focus, isVaultWide }: {
                 currentValue={isBookmarked} onChange={setIsBookmarked}
                 disabled={["root", "_hidden"].includes(note?.noteId ?? "")}
             />
+            {slice.isSharingAvailable() &&
+                <FormListToggleableItem
+                    icon="bx bx-bot"
+                    title={t("agent_writable_switch.title")}
+                    currentValue={isAgentWritable} onChange={setAgentWritable}
+                    disabled={["root", "_hidden"].includes(note?.noteId ?? "")}
+                />
+            }
 
             <FormDropdownDivider />
         </>}
